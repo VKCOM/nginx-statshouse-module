@@ -9,7 +9,7 @@
 #define _NGX_STATSHOUSE_H_INCLUDED_
 
 #include <ngx_core.h>
-#include <ngx_http.h>
+#include <ngx_event.h>
 
 #include "ngx_statshouse_stat.h"
 
