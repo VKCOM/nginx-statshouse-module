@@ -303,9 +303,12 @@ static ngx_http_variable_t  ngx_http_statshouse_variables[] = {
 static ngx_int_t
 ngx_http_statshouse_init(ngx_conf_t *cf)
 {
-    ngx_http_core_main_conf_t  *cmcf;
-    ngx_http_variable_t        *cv, *v;
-    ngx_http_handler_pt        *h;
+    ngx_http_core_main_conf_t         *cmcf;
+    ngx_http_variable_t               *cv, *v;
+    ngx_http_handler_pt               *h;
+    ngx_http_statshouse_main_conf_t   *smcf;
+    ngx_statshouse_server_t          **servers;
+    ngx_uint_t                         i;
 
     for (cv = ngx_http_statshouse_variables; cv->name.len; cv++) {
         v = ngx_http_add_variable(cf, &cv->name, cv->flags);
@@ -314,6 +317,18 @@ ngx_http_statshouse_init(ngx_conf_t *cf)
         }
 
         *v = *cv;
+    }
+
+    smcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_statshouse_module);
+    if (smcf->servers == NULL) {
+        return NGX_OK;
+    }
+
+    servers = smcf->servers->elts;
+    for (i = 0; i < smcf->servers->nelts; i++) {
+        if (ngx_statshouse_server_init(servers[i], cf->pool) != NGX_OK) {
+            return NGX_ERROR;
+        }
     }
 
     cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
@@ -724,16 +739,6 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     server->buffer_size = buffer_size;
     server->splits_max = splits_max;
     server->flush = flush;
-
-    server->buffer = ngx_create_temp_buf(cf->pool, buffer_size);
-    if (server->buffer == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    server->splits = ngx_pcalloc(cf->pool, sizeof(ngx_statshouse_stat_t) * server->splits_max);
-    if (server->splits == NULL) {
-        return NGX_CONF_ERROR;
-    }
 
     slcf->server = server;
     slcf->enable = 1;

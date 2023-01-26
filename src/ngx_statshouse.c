@@ -15,12 +15,49 @@
 #include "ngx_statshouse_tl.h"
 
 
+static void       ngx_statshouse_timer_init(ngx_statshouse_server_t *server);
 static size_t     ngx_statshouse_server_buffer_left(ngx_statshouse_server_t *server);
 static void       ngx_statshouse_read_handler(ngx_event_t *rev);
 static ngx_int_t  ngx_statshouse_connect(ngx_statshouse_server_t *server);
 static void       ngx_statshouse_disconnect(ngx_statshouse_server_t *server);
 static void       ngx_statshouse_timer_handler(ngx_event_t *ev);
 static void       ngx_statshouse_timer(ngx_statshouse_server_t *server);
+
+
+ngx_int_t
+ngx_statshouse_server_init(ngx_statshouse_server_t *server, ngx_pool_t *pool)
+{
+    server->buffer = ngx_create_temp_buf(pool, server->buffer_size);
+    if (server->buffer == NULL) {
+        return NGX_ERROR;
+    }
+
+    server->splits = ngx_pcalloc(pool, sizeof(ngx_statshouse_stat_t) * server->splits_max);
+    if (server->splits == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_statshouse_timer_init(server);
+
+    return NGX_OK;
+}
+
+
+static void
+ngx_statshouse_timer_init(ngx_statshouse_server_t *server)
+{
+    if (server->flush_event.handler != NULL) {
+        return;
+    }
+
+    server->flush_event.handler = ngx_statshouse_timer_handler;
+    server->flush_event.log = ngx_cycle->log;
+    server->flush_event.data = &server->flush_connection;
+    server->flush_event.cancelable = 1;
+
+    server->flush_connection.fd = -1;
+    server->flush_connection.data = server;
+}
 
 
 static size_t
@@ -152,14 +189,6 @@ ngx_statshouse_timer(ngx_statshouse_server_t *server)
     if (ngx_terminate || ngx_exiting) {
         return;
     }
-
-    server->flush_event.handler = ngx_statshouse_timer_handler;
-    server->flush_event.log = ngx_cycle->log;
-    server->flush_event.data = &server->flush_connection;
-    server->flush_event.cancelable = 1;
-
-    server->flush_connection.fd = -1;
-    server->flush_connection.data = server;
 
     ngx_add_timer(&server->flush_event, server->flush);
 }
