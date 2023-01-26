@@ -611,6 +611,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_int_t                          splits_max;
     ngx_uint_t                         i;
     ssize_t                            buffer_size;
+    size_t                             aggregate_size;
     ngx_msec_t                         flush;
 
     value = cf->args->elts;
@@ -628,6 +629,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     buffer_size = 4 * 1024;
+    aggregate_size = 0;
     flush_after_request = 0;
     splits_max = 16;
     flush = 1000;
@@ -658,6 +660,22 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
             continue;
         }
+
+        if (ngx_strncmp(value[i].data, "aggregate=", 10) == 0) {
+
+            s.data =  value[i].data + 10;
+            s.len = value[i].data + value[i].len - s.data;
+
+            aggregate_size = ngx_parse_size(&s);
+
+            if (aggregate_size == (size_t) NGX_ERROR) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid aggregate size \"%V\"", &value[i]);
+                return NGX_CONF_ERROR;
+            }
+
+            continue;
+        }
+
 
         if (ngx_strncmp(value[i].data, "flush=", 6) == 0) {
 
@@ -717,6 +735,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
             ngx_memcmp(servers[i]->addr.addrs->sockaddr, url.addrs->sockaddr, url.addrs->socklen) == 0 &&
             servers[i]->flush_after_request == flush_after_request &&
             servers[i]->splits_max == splits_max &&
+            servers[i]->aggregate_size == aggregate_size &&
             servers[i]->buffer_size == buffer_size)
         {
             server = servers[i];
@@ -747,6 +766,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     server->addr = url;
     server->flush_after_request = flush_after_request;
     server->buffer_size = buffer_size;
+    server->aggregate_size = aggregate_size;
     server->splits_max = splits_max;
     server->flush = flush;
 
@@ -769,6 +789,7 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
 {
     ngx_http_statshouse_loc_conf_t    *shlc;
 
+    ngx_statshouse_server_t           *server;
     ngx_statshouse_conf_t             *confs;
     ngx_statshouse_stat_t             *stats;
     ngx_uint_t                         i;
@@ -783,7 +804,8 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
         "statshouse handler");
 
     confs = shlc->confs->elts;
-    stats = shlc->server->splits;
+    server = shlc->server;
+    stats = server->splits;
 
     for (i = 0; i < shlc->confs->nelts; i++) {
         if (phase == NULL && confs[i].phase.len != 0) {
@@ -797,7 +819,7 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
             continue;
         }
 
-        n = ngx_statshouse_stat_compile(&confs[i], stats, shlc->server->splits_max,
+        n = ngx_statshouse_stat_compile(&confs[i], stats, server->splits_max,
             (ngx_statshouse_complex_value_pt) ngx_http_complex_value, request);
         if (n <= 0) {
             continue;
@@ -807,10 +829,10 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
             "statshouse send %d stats", n);
 
         for (j = 0; j < n; j++) {
-            ngx_statshouse_send(shlc->server, &stats[j], 0);
+            ngx_statshouse_send(server, &stats[j]);
         }
     }
 
-    ngx_statshouse_flush_after_request(shlc->server);
+    ngx_statshouse_flush_after_request(server);
     return NGX_OK;
 }

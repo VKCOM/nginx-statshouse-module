@@ -4,10 +4,12 @@ ngx_module_type=HTTP
 ngx_module_name=ngx_http_statshouse_module
 ngx_module_srcs="
     $ngx_addon_dir/src/ngx_http_statshouse_module.c \
+    $ngx_addon_dir/src/ngx_statshouse_aggregate.c \
     $ngx_addon_dir/src/ngx_statshouse_tl.c \
     $ngx_addon_dir/src/ngx_statshouse.c"
 ngx_module_deps=" \
     $ngx_addon_dir/src/ngx_http_statshouse.h \
+    $ngx_addon_dir/src/ngx_statshouse_aggregate.h \
     $ngx_addon_dir/src/ngx_statshouse_stat.h \
     $ngx_addon_dir/src/ngx_statshouse_tl.h \
     $ngx_addon_dir/src/ngx_statshouse.h"
