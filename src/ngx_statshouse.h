@@ -12,6 +12,7 @@
 #include <ngx_event.h>
 
 #include "ngx_statshouse_stat.h"
+#include "ngx_statshouse_aggregate.h"
 
 
 typedef ngx_int_t (*ngx_statshouse_complex_value_pt)(void *ctx, void *val, ngx_str_t *value);
@@ -59,12 +60,15 @@ typedef struct {
     ngx_msec_t                           flush;
     ngx_event_t                          flush_event;
     ngx_connection_t                     flush_connection;
+
+    ngx_statshouse_aggregate_t          *aggregate;
+    size_t                               aggregate_size;
 } ngx_statshouse_server_t;
 
 
 ngx_int_t  ngx_statshouse_server_init(ngx_statshouse_server_t *server, ngx_pool_t *pool);
 
-ngx_int_t  ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat, ngx_int_t aggregate);
+ngx_int_t  ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat);
 ngx_int_t  ngx_statshouse_flush(ngx_statshouse_server_t *server);
 ngx_int_t  ngx_statshouse_flush_after_request(ngx_statshouse_server_t *server);
 

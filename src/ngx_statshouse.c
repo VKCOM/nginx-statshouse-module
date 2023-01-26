@@ -22,6 +22,8 @@ static ngx_int_t  ngx_statshouse_connect(ngx_statshouse_server_t *server);
 static void       ngx_statshouse_disconnect(ngx_statshouse_server_t *server);
 static void       ngx_statshouse_timer_handler(ngx_event_t *ev);
 static void       ngx_statshouse_timer(ngx_statshouse_server_t *server);
+static ngx_int_t  ngx_statshouse_send_to_buffer(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat);
+static ngx_int_t  ngx_statshouse_aggregate_handler(ngx_statshouse_stat_t *stat, void *ctx);
 
 
 ngx_int_t
@@ -35,6 +37,14 @@ ngx_statshouse_server_init(ngx_statshouse_server_t *server, ngx_pool_t *pool)
     server->splits = ngx_pcalloc(pool, sizeof(ngx_statshouse_stat_t) * server->splits_max);
     if (server->splits == NULL) {
         return NGX_ERROR;
+    }
+
+    if (server->aggregate_size) {
+        server->aggregate = ngx_statshouse_aggregate_create(pool, server->aggregate_size, server->flush,
+            ngx_statshouse_aggregate_handler, server);
+        if (server->aggregate == NULL) {
+            return NGX_ERROR;
+        }
     }
 
     ngx_statshouse_timer_init(server);
@@ -244,8 +254,8 @@ ngx_statshouse_flush_after_request(ngx_statshouse_server_t *server)
 }
 
 
-ngx_int_t
-ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat, ngx_int_t aggregate)
+static ngx_int_t
+ngx_statshouse_send_to_buffer(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat)
 {
     size_t  size;
 
@@ -273,6 +283,22 @@ ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat
         size, ngx_statshouse_server_buffer_left(server));
 
     return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat)
+{
+    ngx_int_t  rc;
+
+    if (server->aggregate) {
+        rc = ngx_statshouse_aggregate(server->aggregate, stat, ngx_current_msec);
+        if (rc == NGX_ERROR || rc == NGX_OK) {
+            return rc;
+        }
+    }
+
+    return ngx_statshouse_send_to_buffer(server, stat);
 }
 
 
@@ -576,4 +602,17 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
             "statshouse return %d splits: <%V>", splits, &s);
 
     return splits;
+}
+
+
+static ngx_int_t
+ngx_statshouse_aggregate_handler(ngx_statshouse_stat_t *stat, void *ctx)
+{
+    ngx_statshouse_server_t  *server = ctx;
+
+    if (stat == NULL) {
+        return ngx_statshouse_flush(server);
+    }
+
+    return ngx_statshouse_send_to_buffer(server, stat);
 }
