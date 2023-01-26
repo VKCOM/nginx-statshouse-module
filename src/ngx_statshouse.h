@@ -61,6 +61,8 @@ typedef struct {
 } ngx_statshouse_server_t;
 
 
+ngx_int_t  ngx_statshouse_server_init(ngx_statshouse_server_t *server, ngx_pool_t *pool);
+
 ngx_int_t  ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat, ngx_int_t aggregate);
 ngx_int_t  ngx_statshouse_flush(ngx_statshouse_server_t *server);
 ngx_int_t  ngx_statshouse_flush_after_request(ngx_statshouse_server_t *server);
