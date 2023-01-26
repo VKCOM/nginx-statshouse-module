@@ -575,16 +575,16 @@ ngx_http_statshouse_key_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 static char *
 ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_statshouse_loc_conf_t   *slcf = conf;
-    ngx_http_statshouse_main_conf_t  *smcf;
-    ngx_statshouse_server_t          *servers, *server = NULL;
-    ngx_url_t                         url;
-    ngx_str_t                        *value, s;
-    ngx_flag_t                        flush_after_request;
-    ngx_int_t                         splits_max;
-    ngx_uint_t                        i;
-    ssize_t                           buffer_size;
-    ngx_msec_t                        flush;
+    ngx_http_statshouse_loc_conf_t    *slcf = conf;
+    ngx_http_statshouse_main_conf_t   *smcf;
+    ngx_statshouse_server_t          **servers, **server_ptr, *server;
+    ngx_url_t                          url;
+    ngx_str_t                         *value, s;
+    ngx_flag_t                         flush_after_request;
+    ngx_int_t                          splits_max;
+    ngx_uint_t                         i;
+    ssize_t                            buffer_size;
+    ngx_msec_t                         flush;
 
     value = cf->args->elts;
 
@@ -675,7 +675,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     smcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_statshouse_module);
 
     if (smcf->servers == NULL) {
-        smcf->servers = ngx_array_create(cf->pool, 1, sizeof(ngx_statshouse_server_t));
+        smcf->servers = ngx_array_create(cf->pool, 1, sizeof(ngx_statshouse_server_t *));
 
         if (smcf->servers == NULL) {
             return NGX_CONF_ERROR;
@@ -683,15 +683,16 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     servers = smcf->servers->elts;
+    server = NULL;
 
     for (i = 0; i < smcf->servers->nelts; i++) {
-        if (servers[i].addr.addrs->socklen == url.addrs->socklen &&
-            ngx_memcmp(servers[i].addr.addrs->sockaddr, url.addrs->sockaddr, url.addrs->socklen) == 0 &&
-            servers[i].flush_after_request == flush_after_request &&
-            servers[i].splits_max == splits_max &&
-            servers[i].buffer_size == buffer_size)
+        if (servers[i]->addr.addrs->socklen == url.addrs->socklen &&
+            ngx_memcmp(servers[i]->addr.addrs->sockaddr, url.addrs->sockaddr, url.addrs->socklen) == 0 &&
+            servers[i]->flush_after_request == flush_after_request &&
+            servers[i]->splits_max == splits_max &&
+            servers[i]->buffer_size == buffer_size)
         {
-            server = &servers[i];
+            server = servers[i];
             break;
         }
     }
@@ -704,12 +705,17 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_OK;
     }
 
-    server = ngx_array_push(smcf->servers);
+    server = ngx_pcalloc(cf->pool, sizeof(ngx_statshouse_server_t));
     if (server == NULL) {
         return NGX_CONF_ERROR;
     }
 
-    ngx_memzero(server, sizeof(ngx_statshouse_server_t));
+    server_ptr = ngx_array_push(smcf->servers);
+    if (server_ptr == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *server_ptr = server;
 
     server->addr = url;
     server->flush_after_request = flush_after_request;
