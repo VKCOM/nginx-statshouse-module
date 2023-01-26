@@ -33,6 +33,7 @@ typedef struct {
 
 typedef struct {
     ngx_str_t                            name;
+    ngx_str_t                            phase;
 
     ngx_array_t                         *condition;
 

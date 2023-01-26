@@ -9,6 +9,7 @@
 #include <ngx_http.h>
 #include <ngx_config.h>
 
+#include "ngx_http_statshouse.h"
 #include "ngx_statshouse.h"
 #include "ngx_statshouse_stat.h"
 
@@ -108,6 +109,15 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, value),
         (void *) ngx_statshouse_mt_unique
+    },
+
+    { ngx_string("phase"),
+        NGX_HTTP_STATSHOUSE_CONF
+            |NGX_CONF_TAKE1,
+        ngx_conf_set_str_slot,
+        NGX_HTTP_STATSHOUSE_CONF_OFFSET,
+        offsetof(ngx_statshouse_conf_t, phase),
+        NULL
     },
 
     { ngx_string("key0"),
@@ -750,6 +760,13 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 static ngx_int_t
 ngx_http_statshouse_handler(ngx_http_request_t *request)
 {
+    return ngx_http_statshouse_send(request, NULL);
+}
+
+
+ngx_int_t
+ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
+{
     ngx_http_statshouse_loc_conf_t    *shlc;
 
     ngx_statshouse_conf_t             *confs;
@@ -769,6 +786,17 @@ ngx_http_statshouse_handler(ngx_http_request_t *request)
     stats = shlc->server->splits;
 
     for (i = 0; i < shlc->confs->nelts; i++) {
+        if (phase == NULL && confs[i].phase.len != 0) {
+            continue;
+        }
+
+        if (phase &&
+            (phase->len != confs[i].phase.len ||
+                ngx_strncmp(phase->data, confs[i].phase.data, phase->len) != 0))
+        {
+            continue;
+        }
+
         n = ngx_statshouse_stat_compile(&confs[i], stats, shlc->server->splits_max,
             (ngx_statshouse_complex_value_pt) ngx_http_complex_value, request);
         if (n <= 0) {
