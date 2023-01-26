@@ -116,7 +116,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[0]),
-        0
+        (void *) "0"
     },
 
     { ngx_string("key1"),
@@ -125,7 +125,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[1]),
-        0
+        (void *) "1"
     },
 
     { ngx_string("key2"),
@@ -134,7 +134,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[2]),
-        0
+        (void *) "2"
     },
 
     { ngx_string("key3"),
@@ -143,7 +143,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[3]),
-        0
+        (void *) "3"
     },
 
     { ngx_string("key4"),
@@ -152,7 +152,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[4]),
-        0
+        (void *) "4"
     },
 
     { ngx_string("key5"),
@@ -161,7 +161,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[5]),
-        0
+        (void *) "5"
     },
 
     { ngx_string("key6"),
@@ -170,7 +170,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[6]),
-        0
+        (void *) "6"
     },
 
     { ngx_string("key7"),
@@ -179,7 +179,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[7]),
-        0
+        (void *) "7"
     },
 
     { ngx_string("key8"),
@@ -188,7 +188,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[8]),
-        0
+        (void *) "8"
     },
 
     { ngx_string("key9"),
@@ -197,7 +197,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[9]),
-        0
+        (void *) "9"
     },
 
     { ngx_string("key10"),
@@ -206,7 +206,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[10]),
-        0
+        (void *) "10"
     },
 
     { ngx_string("key11"),
@@ -215,7 +215,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[11]),
-        0
+        (void *) "11"
     },
 
     { ngx_string("key12"),
@@ -224,7 +224,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[12]),
-        0
+        (void *) "12"
     },
 
     { ngx_string("key13"),
@@ -233,7 +233,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[13]),
-        0
+        (void *) "13"
     },
 
     { ngx_string("key14"),
@@ -242,7 +242,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[14]),
-        0
+        (void *) "14"
     },
 
     { ngx_string("key15"),
@@ -251,7 +251,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[15]),
-        0
+        (void *) "15"
     },
 
     { ngx_string("skey"),
@@ -260,7 +260,7 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         ngx_http_statshouse_key_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, keys[16]),
-        0
+        (void *) "_s"
     },
 
     ngx_null_command
@@ -541,7 +541,9 @@ ngx_http_statshouse_key_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     value = cf->args->elts;
-    key->name = value[0];
+
+    key->name.data = (u_char *) cmd->post;
+    key->name.len = ngx_strlen(key->name.data);
 
     ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
 
