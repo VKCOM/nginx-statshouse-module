@@ -16,4 +16,22 @@ ngx_module_deps=" \
 
 . auto/module
 
+if [ $STREAM != NO ]; then
+    ngx_module_type=STREAM
+    ngx_module_name=ngx_stream_statshouse_module
+    ngx_module_srcs="
+        $ngx_addon_dir/src/ngx_stream_statshouse_module.c \
+        $ngx_addon_dir/src/ngx_statshouse_aggregate.c \
+        $ngx_addon_dir/src/ngx_statshouse_tl.c \
+        $ngx_addon_dir/src/ngx_statshouse.c"
+    ngx_module_deps=" \
+        $ngx_addon_dir/src/ngx_stream_statshouse.h \
+        $ngx_addon_dir/src/ngx_statshouse_aggregate.h \
+        $ngx_addon_dir/src/ngx_statshouse_stat.h \
+        $ngx_addon_dir/src/ngx_statshouse_tl.h \
+        $ngx_addon_dir/src/ngx_statshouse.h"
+
+    . auto/module
+fi
+
 have=NGX_HTTP_STATSHOUSE_MODULE . auto/have
