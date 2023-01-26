@@ -6,7 +6,6 @@
  */
 
 #include <ngx_core.h>
-#include <ngx_http.h>
 #include <ngx_config.h>
 #include <ngx_event.h>
 #include <ngx_event_connect.h>
@@ -104,7 +103,7 @@ ngx_statshouse_connect(ngx_statshouse_server_t *server)
         }
     }
 
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
         "statshouse success connect: %V", &server->addr.addrs->name);
 
     return NGX_OK;
@@ -190,7 +189,7 @@ ngx_statshouse_flush(ngx_statshouse_server_t *server)
             continue;
         }
 
-        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+        ngx_log_debug2(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
             "statshouse send %z bytes: %V", n, &server->addr.addrs->name);
 
         if (ngx_terminate || ngx_exiting) {
@@ -223,7 +222,7 @@ ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat
 
     size = ngx_statshouse_tl_metrics_len(stat, 1);
 
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
         "statshouse build %z stat", size);
 
     if (ngx_statshouse_server_buffer_left(server) < size) {
@@ -240,7 +239,7 @@ ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat
     ngx_statshouse_tl_metrics(server->buffer, stat, 1);
     ngx_statshouse_timer(server);
 
-    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+    ngx_log_debug2(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
         "statshouse append new stat %z bytes, left %z",
         size, ngx_statshouse_server_buffer_left(server));
 
@@ -442,7 +441,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
                 case ngx_statshouse_mt_counter:
                     n = ngx_atoi(split.data, split.len);
                     if (n == NGX_ERROR) {
-                        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+                        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
                             "statshouse error parse counter: <%V>", &split);
                         return NGX_ERROR;
                     }
@@ -462,7 +461,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
 
                     n = ngx_atofp(split.data, split.len, 8);
                     if (n == NGX_ERROR) {
-                        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+                        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
                             "statshouse error parse value: <%V>", &split);
                         return NGX_ERROR;
                     }
@@ -478,7 +477,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
                 case ngx_statshouse_mt_unique:
                     n = ngx_atoi(split.data, split.len);
                     if (n == NGX_ERROR) {
-                        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+                        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
                             "statshouse error parse unique: <%V>", &split);
                         return NGX_ERROR;
                     }
@@ -502,7 +501,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
     } while (conf->value.split && splits < max);
 
     if (splits == 0) {
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
             "statshouse empty splits: <%V>", &s);
 
         return NGX_DECLINED;
@@ -544,7 +543,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
         }
     }
 
-    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+    ngx_log_debug2(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
             "statshouse return %d splits: <%V>", splits, &s);
 
     return splits;
