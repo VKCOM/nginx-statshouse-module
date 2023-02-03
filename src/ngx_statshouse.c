@@ -448,8 +448,10 @@ ngx_int_t
 ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *stats, ngx_int_t max,
     ngx_statshouse_complex_value_pt complex, void *complex_ctx)
 {
+    ngx_statshouse_stat_t      *stat;
     ngx_statshouse_stat_key_t  *key;
-    ngx_int_t                   i, j, n, rc, minus;
+    ngx_str_t                   keys[NGX_STATSHOUSE_STAT_KEYS_MAX];
+    ngx_int_t                   i, j, n, rc, previ, minus;
     u_char                     *next;
     time_t                      now;
 
@@ -473,6 +475,18 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
 
     if (complex(complex_ctx, conf->value.complex, &s) != NGX_OK) {
         return NGX_ERROR;
+    }
+
+    for (i = 0; i < NGX_STATSHOUSE_STAT_KEYS_MAX; i++) {
+        ngx_str_null(&keys[i]);
+
+        if (conf->keys[i].name.len == 0) {
+            continue;
+        }
+
+        if (complex(complex_ctx, conf->keys[i].complex, &keys[i]) != NGX_OK) {
+            return NGX_ERROR;
+        }
     }
 
     splits = 0;
@@ -548,6 +562,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
         }
 
         stats[splits].keys_count = 0;
+
         stats[splits].name = conf->name;
         stats[splits].type = conf->value.type;
 
@@ -563,15 +578,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
     }
 
     for (i = 0; i < NGX_STATSHOUSE_STAT_KEYS_MAX; i++) {
-        if (conf->keys[i].name.len == 0) {
-            continue;
-        }
-
-        if (complex(complex_ctx, conf->keys[i].complex, &s) != NGX_OK) {
-            return NGX_ERROR;
-        }
-
-        if (ngx_statshouse_is_empty(&s)) {
+        if (ngx_statshouse_is_empty(&keys[i])) {
             continue;
         }
 
@@ -579,21 +586,66 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
             ngx_str_null(&split);
             j = 0;
 
-            while (j < splits && ngx_statshouse_stat_part(&s, &split, &next)) {
-                key = &stats[j].keys[stats[j].keys_count];
+            while (j < max && ngx_statshouse_stat_part(&keys[i], &split, &next)) {
+                stat = &stats[j];
+
+                if (j >= splits) {
+                    // init new splits
+
+                    stat->keys_count = 0;
+
+                    stat->name = conf->name;
+                    stat->type = conf->value.type;
+
+                    if (conf->value.split) {
+                        ngx_memzero(&stat->value, sizeof(stat->value));
+                    } else {
+                        stat->value = stats[0].value;
+                    }
+
+                    for (previ = 0; previ < i; previ++) {
+                        if (conf->keys[previ].name.len == 0) {
+                            continue;
+                        }
+
+                        if (conf->keys[previ].split) {
+                            continue;
+                        }
+
+                        if (ngx_statshouse_is_empty(&keys[previ])) {
+                            continue;
+                        }
+
+                        key = &stat->keys[stat->keys_count];
+
+                        key->name = conf->keys[previ].name;
+                        key->value = keys[previ];
+
+                        ++stat->keys_count;
+                    }
+                }
+
+                key = &stat->keys[stat->keys_count];
+
                 key->name = conf->keys[i].name;
                 key->value = split;
 
-                ++stats[j].keys_count;
+                ++stat->keys_count;
                 ++j;
+            }
+
+            if (j > splits) {
+                splits = j;
             }
         } else {
             for (j = 0; j < splits; j++) {
-                key = &stats[j].keys[stats[j].keys_count];
-                key->name = conf->keys[i].name;
-                key->value = s;
+                stat = &stats[j];
+                key = &stat->keys[stat->keys_count];
 
-                ++stats[j].keys_count;
+                key->name = conf->keys[i].name;
+                key->value = keys[i];
+
+                ++stat->keys_count;
             }
         }
     }
