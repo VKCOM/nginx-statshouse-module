@@ -10,8 +10,7 @@
 
 #include <ngx_core.h>
 #include <ngx_event.h>
-
-#include "ngx_statshouse_stat.h"
+#include <ngx_statshouse_stat.h>
 
 
 typedef ngx_int_t (*ngx_statshouse_aggregate_pt)(ngx_statshouse_stat_t *stat, void *ctx);

@@ -10,9 +10,9 @@
 #include <ngx_config.h>
 
 #include <ngx_http_statshouse.h>
+#include <ngx_statshouse_stat.h>
 
 #include "ngx_statshouse.h"
-#include "ngx_statshouse_stat.h"
 
 
 #define NGX_HTTP_STATSHOUSE_CONF                0x100000000

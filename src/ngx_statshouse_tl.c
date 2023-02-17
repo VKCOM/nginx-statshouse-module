@@ -6,9 +6,9 @@
  */
 
 #include <ngx_core.h>
+#include <ngx_statshouse_stat.h>
 
 #include "ngx_statshouse_tl.h"
-#include "ngx_statshouse_stat.h"
 
 
 #define NGX_STATSHOUSE_TL_TINY_STRING_LEN    253

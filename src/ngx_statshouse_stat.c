@@ -6,8 +6,7 @@
  */
 
 #include <ngx_core.h>
-
-#include "ngx_statshouse_stat.h"
+#include <ngx_statshouse_stat.h>
 
 
 void

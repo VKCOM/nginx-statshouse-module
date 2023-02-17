@@ -6,9 +6,9 @@
  */
 
 #include <ngx_core.h>
+#include <ngx_statshouse_stat.h>
 
 #include "ngx_statshouse_aggregate.h"
-#include "ngx_statshouse_stat.h"
 
 
 typedef struct {
