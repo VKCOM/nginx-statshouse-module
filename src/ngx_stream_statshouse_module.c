@@ -895,3 +895,24 @@ ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
     ngx_statshouse_flush_after_request(server);
     return NGX_OK;
 }
+
+
+ngx_int_t
+ngx_stream_statshouse_send_stat(ngx_stream_session_t *session, ngx_statshouse_stat_t *stat)
+{
+    ngx_stream_statshouse_srv_conf_t  *shlc;
+    ngx_statshouse_server_t           *server;
+
+    shlc = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
+    if (shlc->server == NULL || shlc->enable == 0) {
+        return NGX_OK;
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, session->connection->log, 0,
+        "statshouse stat handler");
+
+    server = shlc->server;
+
+    ngx_statshouse_send(server, stat);
+    return NGX_OK;
+}

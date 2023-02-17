@@ -11,8 +11,11 @@
 #include <ngx_core.h>
 #include <ngx_stream.h>
 
+#include <ngx_statshouse_stat.h>
+
 
 ngx_int_t  ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase);
+ngx_int_t  ngx_stream_statshouse_send_stat(ngx_stream_session_t *session, ngx_statshouse_stat_t *stat);
 
 
 #endif

@@ -11,8 +11,11 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
+#include <ngx_statshouse_stat.h>
+
 
 ngx_int_t  ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase);
+ngx_int_t  ngx_http_statshouse_send_stat(ngx_http_request_t *request, ngx_statshouse_stat_t *stat);
 
 
 #endif

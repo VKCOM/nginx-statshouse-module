@@ -459,7 +459,6 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
     ngx_statshouse_complex_value_pt complex, void *complex_ctx)
 {
     ngx_statshouse_stat_t      *stat;
-    ngx_statshouse_stat_key_t  *key;
     ngx_str_t                   keys[NGX_STATSHOUSE_STAT_KEYS_MAX];
     ngx_int_t                   i, j, n, rc, previ, minus;
     u_char                     *next;
@@ -515,6 +514,9 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
             split = s;
         }
 
+        stat = &stats[splits];
+        ngx_statshouse_stat_init(stat, conf->name, conf->value.type);
+
         if (split.len > 0) {
             switch (conf->value.type) {
                 case ngx_statshouse_mt_counter:
@@ -525,10 +527,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
                         return NGX_ERROR;
                     }
 
-                    stat = &stats[splits];
-
-                    stat->values_count = 1;
-                    stat->values[0].counter = n;
+                    ngx_statshouse_stat_value_counter(stat, n);
                     break;
 
                 case ngx_statshouse_mt_value:
@@ -548,13 +547,10 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
                         return NGX_ERROR;
                     }
 
-                    stat = &stats[splits];
-                    stat->values_count = 1;
-
-                    stat->values[0].value = ((double) n) / 100000000.0;
-
                     if (minus) {
-                        stat->values[0].value = -stat->values[0].value;
+                        ngx_statshouse_stat_value_nvalue(stat, ((double) n) / 100000000.0);
+                    } else {
+                        ngx_statshouse_stat_value_value(stat, ((double) n) / 100000000.0);
                     }
 
                     break;
@@ -567,27 +563,15 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
                         return NGX_ERROR;
                     }
 
-                    stat = &stats[splits];
-
-                    stat->values_count = 1;
-                    stat->values[0].unique = n;
-
+                    ngx_statshouse_stat_value_unique(stat, n);
                     break;
 
                 default:
                     return NGX_ERROR;
             }
         } else {
-            stat = &stats[splits];
-
-            stat->values_count = 1;
-            ngx_memzero(&stat->values[0], sizeof(stat->values[0]));
+            ngx_statshouse_stat_value_zero(stat);
         }
-
-        stats[splits].keys_count = 0;
-
-        stats[splits].name = conf->name;
-        stats[splits].type = conf->value.type;
 
         splits++;
 
@@ -615,17 +599,12 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
                 if (j >= splits) {
                     // init new splits
 
-                    stat->keys_count = 0;
-
-                    stat->name = conf->name;
-                    stat->type = conf->value.type;
-
-                    stat->values_count = 1;
+                    ngx_statshouse_stat_init(stat, conf->name, conf->value.type);
 
                     if (conf->value.split) {
-                        ngx_memzero(&stat->values[0], sizeof(stat->values[0]));
+                        ngx_statshouse_stat_value_zero(stat);
                     } else {
-                        stat->values[0] = stats[0].values[0];
+                        ngx_statshouse_stat_value(stat, stats[0].values[0]);
                     }
 
                     for (previ = 0; previ < i; previ++) {
@@ -641,21 +620,11 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
                             continue;
                         }
 
-                        key = &stat->keys[stat->keys_count];
-
-                        key->name = conf->keys[previ].name;
-                        key->value = keys[previ];
-
-                        ++stat->keys_count;
+                        ngx_statshouse_stat_key(stat, conf->keys[previ].name, keys[previ]);
                     }
                 }
 
-                key = &stat->keys[stat->keys_count];
-
-                key->name = conf->keys[i].name;
-                key->value = split;
-
-                ++stat->keys_count;
+                ngx_statshouse_stat_key(stat, conf->keys[i].name, split);
                 ++j;
             }
 
@@ -664,13 +633,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
             }
         } else {
             for (j = 0; j < splits; j++) {
-                stat = &stats[j];
-                key = &stat->keys[stat->keys_count];
-
-                key->name = conf->keys[i].name;
-                key->value = keys[i];
-
-                ++stat->keys_count;
+                ngx_statshouse_stat_key(&stats[j], conf->keys[i].name, keys[i]);
             }
         }
     }
