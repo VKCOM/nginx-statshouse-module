@@ -609,7 +609,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_url_t                          url;
     ngx_str_t                         *value, s;
     ngx_flag_t                         flush_after_request;
-    ngx_int_t                          splits_max;
+    ngx_int_t                          splits_max, aggregate_values;
     ngx_uint_t                         i;
     ssize_t                            buffer_size;
     size_t                             aggregate_size;
@@ -631,6 +631,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     buffer_size = 4 * 1024;
     aggregate_size = 0;
+    aggregate_values = 24;
     flush_after_request = 0;
     splits_max = 16;
     flush = 1000;
@@ -671,6 +672,21 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
             if (aggregate_size == (size_t) NGX_ERROR) {
                 ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid aggregate size \"%V\"", &value[i]);
+                return NGX_CONF_ERROR;
+            }
+
+            continue;
+        }
+
+        if (ngx_strncmp(value[i].data, "aggregate_values=", 17) == 0) {
+
+            s.data =  value[i].data + 10;
+            s.len = value[i].data + value[i].len - s.data;
+
+            aggregate_values = ngx_atoi(s.data, s.len);
+
+            if (aggregate_values == NGX_ERROR) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid aggregate values max \"%V\"", &value[i]);
                 return NGX_CONF_ERROR;
             }
 
@@ -737,6 +753,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
             servers[i]->flush_after_request == flush_after_request &&
             servers[i]->splits_max == splits_max &&
             servers[i]->aggregate_size == aggregate_size &&
+            servers[i]->aggregate_values == aggregate_values &&
             servers[i]->buffer_size == buffer_size)
         {
             server = servers[i];
@@ -768,6 +785,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     server->flush_after_request = flush_after_request;
     server->buffer_size = buffer_size;
     server->aggregate_size = aggregate_size;
+    server->aggregate_values = aggregate_values;
     server->splits_max = splits_max;
     server->flush = flush;
 

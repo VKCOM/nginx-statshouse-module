@@ -172,12 +172,12 @@ ngx_statshouse_tl_metric_len(const ngx_statshouse_stat_t *stat)
 
         case ngx_statshouse_mt_value:
             len += ngx_statshouse_tl_uint32_len(); // values count
-            len += ngx_statshouse_tl_double_len(); // value
+            len += ngx_statshouse_tl_double_len() * stat->values_count; // values
             break;
 
         case ngx_statshouse_mt_unique:
             len += ngx_statshouse_tl_uint32_len(); // unique count
-            len += ngx_statshouse_tl_int64_len(); // unique
+            len += ngx_statshouse_tl_int64_len() * stat->values_count; // unique
             break;
     }
 
@@ -216,17 +216,22 @@ ngx_statshouse_tl_metric(ngx_buf_t *buf, const ngx_statshouse_stat_t *stat)
 
     switch (stat->type) {
         case ngx_statshouse_mt_counter:
-            ngx_statshouse_tl_double(buf, stat->value.counter);
+            ngx_statshouse_tl_double(buf, stat->values[0].counter);
             break;
 
         case ngx_statshouse_mt_value:
-            ngx_statshouse_tl_uint32(buf, 1);
-            ngx_statshouse_tl_double(buf, stat->value.value);
+            ngx_statshouse_tl_uint32(buf, stat->values_count);
+
+            for (i = 0; i < stat->values_count; i++) {
+                ngx_statshouse_tl_double(buf, stat->values[i].value);
+            }
             break;
 
         case ngx_statshouse_mt_unique:
             ngx_statshouse_tl_uint32(buf, 1);
-            ngx_statshouse_tl_int64(buf, stat->value.unique);
+            for (i = 0; i < stat->values_count; i++) {
+                ngx_statshouse_tl_int64(buf, stat->values[i].unique);
+            }
             break;
     }
 }

@@ -33,13 +33,14 @@ typedef struct {
 } ngx_statshouse_stat_key_t;
 
 typedef struct {
-    ngx_statshouse_stat_value_t          value;
     ngx_statshouse_stat_type_e           type;
-
     ngx_str_t                            name;
 
     ngx_statshouse_stat_key_t            keys[NGX_STATSHOUSE_STAT_KEYS_MAX];
     ngx_int_t                            keys_count;
+
+    ngx_int_t                            values_count;
+    ngx_statshouse_stat_value_t          values[1];
 } ngx_statshouse_stat_t;
 
 
