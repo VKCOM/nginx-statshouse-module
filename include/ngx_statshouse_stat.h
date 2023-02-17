@@ -44,4 +44,16 @@ typedef struct {
 } ngx_statshouse_stat_t;
 
 
+void  ngx_statshouse_stat_init(ngx_statshouse_stat_t *stat, ngx_str_t name, ngx_statshouse_stat_type_e type);
+
+void  ngx_statshouse_stat_value_zero(ngx_statshouse_stat_t *stat);
+void  ngx_statshouse_stat_value(ngx_statshouse_stat_t *stat, ngx_statshouse_stat_value_t value);
+void  ngx_statshouse_stat_value_counter(ngx_statshouse_stat_t *stat, int64_t counter);
+void  ngx_statshouse_stat_value_value(ngx_statshouse_stat_t *stat, double value);
+void  ngx_statshouse_stat_value_nvalue(ngx_statshouse_stat_t *stat, double value);
+void  ngx_statshouse_stat_value_unique(ngx_statshouse_stat_t *stat, double unique);
+
+void  ngx_statshouse_stat_key(ngx_statshouse_stat_t *stat, ngx_str_t name, ngx_str_t value);
+
+
 #endif
