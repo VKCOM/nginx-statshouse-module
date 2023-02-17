@@ -63,6 +63,7 @@ typedef struct {
 
     ngx_statshouse_aggregate_t          *aggregate;
     size_t                               aggregate_size;
+    ngx_int_t                            aggregate_values;
 } ngx_statshouse_server_t;
 
 

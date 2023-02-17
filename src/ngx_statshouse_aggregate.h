@@ -32,13 +32,12 @@ typedef struct {
     ngx_connection_t              timer_connection;
 
     ngx_msec_t                    interval;
+    ngx_int_t                     values;
+    size_t                        size;
 } ngx_statshouse_aggregate_t;
 
 
-ngx_int_t  ngx_statshouse_aggregate_init(ngx_statshouse_aggregate_t *aggregate, ngx_pool_t *pool, size_t size, ngx_msec_t interval,
-    ngx_statshouse_aggregate_pt handler, void *ctx);
-ngx_statshouse_aggregate_t  *ngx_statshouse_aggregate_create(ngx_pool_t *pool, size_t size, ngx_msec_t interval,
-    ngx_statshouse_aggregate_pt handler, void *ctx);
+ngx_int_t  ngx_statshouse_aggregate_init(ngx_statshouse_aggregate_t *aggregate, ngx_pool_t *pool);
 ngx_int_t  ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_stat_t *stat, ngx_msec_t now);
 ngx_int_t  ngx_statshouse_aggregate_process(ngx_statshouse_aggregate_t *aggregate, ngx_msec_t now);
 
