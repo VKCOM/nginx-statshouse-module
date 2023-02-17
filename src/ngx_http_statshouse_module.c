@@ -680,7 +680,7 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
         if (ngx_strncmp(value[i].data, "aggregate_values=", 17) == 0) {
 
-            s.data =  value[i].data + 10;
+            s.data =  value[i].data + 17;
             s.len = value[i].data + value[i].len - s.data;
 
             aggregate_values = ngx_atoi(s.data, s.len);
