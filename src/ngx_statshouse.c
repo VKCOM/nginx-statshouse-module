@@ -9,9 +9,9 @@
 #include <ngx_config.h>
 #include <ngx_event.h>
 #include <ngx_event_connect.h>
+#include <ngx_statshouse_stat.h>
 
 #include "ngx_statshouse.h"
-#include "ngx_statshouse_stat.h"
 #include "ngx_statshouse_tl.h"
 
 

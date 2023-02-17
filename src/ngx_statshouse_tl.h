@@ -9,8 +9,7 @@
 #define _NGX_STATSHOUSE_TL_H_INCLUDED_
 
 #include <ngx_core.h>
-
-#include "ngx_statshouse_stat.h"
+#include <ngx_statshouse_stat.h>
 
 
 size_t  ngx_statshouse_tl_metrics_len(const ngx_statshouse_stat_t *stat, ngx_int_t count);
