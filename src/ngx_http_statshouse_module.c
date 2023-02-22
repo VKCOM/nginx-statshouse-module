@@ -789,6 +789,8 @@ ngx_http_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     server->splits_max = splits_max;
     server->flush = flush;
 
+    server->log = &cf->cycle->new_log;
+
     slcf->server = server;
     slcf->enable = 1;
 
@@ -839,7 +841,8 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
         }
 
         n = ngx_statshouse_stat_compile(&confs[i], stats, server->splits_max,
-            (ngx_statshouse_complex_value_pt) ngx_http_complex_value, request);
+            (ngx_statshouse_complex_value_pt) ngx_http_complex_value, request,
+            request->connection->log);
         if (n <= 0) {
             continue;
         }
