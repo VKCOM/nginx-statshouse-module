@@ -33,6 +33,8 @@ typedef struct {
     ngx_msec_t                    interval;
     ngx_int_t                     values;
     size_t                        size;
+
+    ngx_log_t                    *log;
 } ngx_statshouse_aggregate_t;
 
 

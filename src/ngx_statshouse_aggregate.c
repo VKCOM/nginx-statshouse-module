@@ -48,7 +48,7 @@ ngx_statshouse_aggregate_init(ngx_statshouse_aggregate_t *aggregate, ngx_pool_t 
     ngx_queue_init(&aggregate->queue);
 
     aggregate->timer_event.handler = ngx_statshouse_aggregate_timer_handler;
-    aggregate->timer_event.log = ngx_cycle->log;
+    aggregate->timer_event.log = aggregate->log;
     aggregate->timer_event.data = &aggregate->timer_connection;
     aggregate->timer_event.cancelable = 1;
 
@@ -73,7 +73,7 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
     }
 
     if (ngx_terminate || ngx_exiting) {
-        ngx_log_debug0(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+        ngx_log_debug0(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
             "statshouse decline aggregate, worker exiting");
 
         return NGX_DECLINED;
@@ -102,7 +102,7 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
         if (stat->type == ngx_statshouse_mt_counter) {
             astat->stat.values[0].counter += stat->values[0].counter;
 
-            ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+            ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
                 "statshouse success aggregate counter, found exists node (%v)", &stat->name);
 
             return NGX_OK;
@@ -112,7 +112,7 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
             astat->stat.values[astat->stat.values_count] = stat->values[0];
             astat->stat.values_count++;
 
-            ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+            ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
                 "statshouse success aggregate value, found exists node (%v)", &stat->name);
 
             return NGX_OK;
@@ -126,7 +126,7 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
 
     astat = ngx_statshouse_aggregate_alloc(aggregate, size);
     if (astat == NULL) {
-        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+        ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
             "statshouse aggregate, error allocate %uz size", size);
 
         rc = ngx_statshouse_aggregate_process(aggregate, now);
@@ -137,14 +137,14 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
 
         astat = ngx_statshouse_aggregate_alloc(aggregate, size);
         if (astat == NULL) {
-            ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+            ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
                 "statshouse error aggregate, double error allocate %uz size", size);
 
             return NGX_DECLINED;
         }
     }
 
-    ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
         "statshouse aggregate, success allocate %uz size", size);
 
     astat->node.key = hash;
@@ -190,14 +190,14 @@ ngx_statshouse_aggregate_process(ngx_statshouse_aggregate_t *aggregate, ngx_msec
     ngx_int_t                         rc, count = 0, flush = 0;
 
     if (ngx_queue_empty(&aggregate->queue)) {
-        ngx_log_debug0(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+        ngx_log_debug0(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
             "statshouse aggregate, empty queue");
 
         return NGX_DECLINED;
     }
 
     if (ngx_terminate || ngx_exiting) {
-        ngx_log_debug0(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+        ngx_log_debug0(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
             "statshouse aggregate, flush all queue");
 
         flush = 1;
@@ -229,7 +229,7 @@ ngx_statshouse_aggregate_process(ngx_statshouse_aggregate_t *aggregate, ngx_msec
 
     } while (!ngx_queue_empty(&aggregate->queue));
 
-    ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
         "statshouse aggregate, flush %d stats", count);
 
     if (count == 0) {
@@ -274,14 +274,14 @@ ngx_statshouse_aggregate_timer(ngx_statshouse_aggregate_t *aggregate, ngx_msec_t
 
     diff = now - astat->time;
     if (diff >= aggregate->interval) {
-        ngx_log_debug0(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+        ngx_log_debug0(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
             "statshouse aggregate, set posted");
 
         ngx_post_event(&aggregate->timer_event, &ngx_posted_events);
         return;
     }
 
-    ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
         "statshouse aggregate, flush timer %M", aggregate->interval - diff);
 
     ngx_add_timer(&aggregate->timer_event, aggregate->interval - diff);
@@ -397,13 +397,13 @@ ngx_statshouse_aggregate_alloc(ngx_statshouse_aggregate_t *aggregate, size_t siz
     }
 
     if (ptr == NULL) {
-        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+        ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
             "statshouse aggregate, error allocate %uz bytes", size);
 
         return NULL;
     }
 
-    ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
         "statshouse aggregate, success allocate %uz bytes", size);
 
     return ptr;
@@ -413,7 +413,7 @@ ngx_statshouse_aggregate_alloc(ngx_statshouse_aggregate_t *aggregate, size_t siz
 static void
 ngx_statshouse_aggregate_free(ngx_statshouse_aggregate_t *aggregate, void *ptr, size_t size)
 {
-    ngx_log_debug1(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
         "statshouse aggregate, free %uz bytes", size);
 
     if (ptr == aggregate->alloc.start) {
