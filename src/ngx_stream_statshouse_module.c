@@ -585,7 +585,7 @@ ngx_stream_statshouse_value_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
-    field->type = (ngx_statshouse_stat_type_e) cmd->post;
+    field->type = *((ngx_statshouse_stat_type_e *) &cmd->post);
 
     return NGX_CONF_OK;
 }
