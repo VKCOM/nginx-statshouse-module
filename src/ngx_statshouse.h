@@ -53,6 +53,7 @@ typedef struct {
 
     ngx_statshouse_conf_value_t          value;
     ngx_statshouse_conf_key_t            keys[NGX_STATSHOUSE_STAT_KEYS_MAX];
+    ngx_int_t                            sample;
 } ngx_statshouse_conf_t;
 
 typedef struct {
