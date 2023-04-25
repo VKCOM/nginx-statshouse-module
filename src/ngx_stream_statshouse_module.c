@@ -275,6 +275,15 @@ static ngx_command_t  ngx_stream_statshouse_commands[] = {
         (void *) "_s"
     },
 
+    { ngx_string("sample"),
+        NGX_STREAM_STATSHOUSE_CONF
+            |NGX_CONF_TAKE1,
+        ngx_conf_set_num_slot,
+        NGX_STREAM_STATSHOUSE_CONF_OFFSET,
+        offsetof(ngx_statshouse_conf_t, sample),
+        NULL
+    },
+
     ngx_null_command
 };
 
@@ -515,6 +524,7 @@ ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
 
     shc->condition = NGX_CONF_UNSET_PTR;
     shc->timeout = NGX_CONF_UNSET;
+    shc->sample = NGX_CONF_UNSET;
 
     ctx->statshouse_conf[ngx_stream_statshouse_module.ctx_index] = shc;
 
@@ -537,6 +547,7 @@ ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
 
     ngx_conf_init_ptr_value(shc->condition, NULL);
     ngx_conf_init_value(shc->timeout, 0);
+    ngx_conf_init_value(shc->sample, 0);
 
     return NGX_CONF_OK;
 }
@@ -876,6 +887,12 @@ ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
         if (phase &&
             (phase->len != confs[i].phase.len ||
                 ngx_strncmp(phase->data, confs[i].phase.data, phase->len) != 0))
+        {
+            continue;
+        }
+
+        if ((confs[i].sample > 0) &&
+            (ngx_random() % 100 > confs[i].sample))
         {
             continue;
         }
