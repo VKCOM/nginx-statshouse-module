@@ -18,4 +18,11 @@ ngx_int_t  ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phas
 ngx_int_t  ngx_http_statshouse_send_stat(ngx_http_request_t *request, ngx_statshouse_stat_t *stat);
 
 
+ngx_int_t  ngx_http_statshouse_send_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t *ctx,
+    ngx_pool_t *pool, ngx_str_t *phase);
+ngx_int_t  ngx_http_statshouse_send_http(ngx_cycle_t *cycle, ngx_pool_t *pool, ngx_str_t *phase);
+ngx_int_t  ngx_http_statshouse_send_server(ngx_cycle_t *cycle, ngx_http_core_srv_conf_t *server,
+    ngx_pool_t *pool, ngx_str_t *phase);
+
+
 #endif
