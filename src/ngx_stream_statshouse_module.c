@@ -848,7 +848,7 @@ ngx_stream_statshouse_handler(ngx_stream_session_t *session)
 ngx_int_t
 ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
 {
-    ngx_stream_statshouse_srv_conf_t  *shlc;
+    ngx_stream_statshouse_srv_conf_t  *sscf;
 
     ngx_statshouse_server_t           *server;
     ngx_statshouse_conf_t             *confs;
@@ -856,19 +856,19 @@ ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
     ngx_uint_t                         i;
     ngx_int_t                          j, n;
 
-    shlc = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
-    if (shlc->server == NULL || shlc->confs == NULL || shlc->enable == 0) {
+    sscf = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
+    if (sscf->server == NULL || sscf->confs == NULL || sscf->enable == 0) {
         return NGX_OK;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_STREAM, session->connection->log, 0,
         "statshouse handler");
 
-    confs = shlc->confs->elts;
-    server = shlc->server;
+    confs = sscf->confs->elts;
+    server = sscf->server;
     stats = server->splits;
 
-    for (i = 0; i < shlc->confs->nelts; i++) {
+    for (i = 0; i < sscf->confs->nelts; i++) {
         if (phase == NULL && confs[i].phase.len != 0) {
             continue;
         }
@@ -903,18 +903,18 @@ ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
 ngx_int_t
 ngx_stream_statshouse_send_stat(ngx_stream_session_t *session, ngx_statshouse_stat_t *stat)
 {
-    ngx_stream_statshouse_srv_conf_t  *shlc;
+    ngx_stream_statshouse_srv_conf_t  *sscf;
     ngx_statshouse_server_t           *server;
 
-    shlc = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
-    if (shlc->server == NULL || shlc->enable == 0) {
+    sscf = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
+    if (sscf->server == NULL || sscf->enable == 0) {
         return NGX_OK;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_STREAM, session->connection->log, 0,
         "statshouse stat handler");
 
-    server = shlc->server;
+    server = sscf->server;
 
     ngx_statshouse_send(server, stat);
     return NGX_OK;

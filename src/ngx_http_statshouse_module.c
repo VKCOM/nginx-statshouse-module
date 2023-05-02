@@ -427,7 +427,7 @@ ngx_http_statshouse_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 static char *
 ngx_http_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_statshouse_loc_conf_t  *shlc = conf;
+    ngx_http_statshouse_loc_conf_t  *slcf = conf;
 
     ngx_http_statshouse_conf_ctx_t  *ctx;
     ngx_statshouse_conf_t           *shc;
@@ -451,18 +451,18 @@ ngx_http_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
-    if (shlc->confs == NULL) {
-        shlc->confs = ngx_pcalloc(cf->pool, sizeof(ngx_array_t));
-        if (shlc->confs == NULL) {
+    if (slcf->confs == NULL) {
+        slcf->confs = ngx_pcalloc(cf->pool, sizeof(ngx_array_t));
+        if (slcf->confs == NULL) {
             return NGX_CONF_ERROR;
         }
 
-        if (ngx_array_init(shlc->confs, cf->pool, 1, sizeof(ngx_statshouse_conf_t)) != NGX_OK) {
+        if (ngx_array_init(slcf->confs, cf->pool, 1, sizeof(ngx_statshouse_conf_t)) != NGX_OK) {
             return NGX_CONF_ERROR;
         }
     }
 
-    shc = ngx_array_push(shlc->confs);
+    shc = ngx_array_push(slcf->confs);
     if (shc == NULL) {
         return NGX_CONF_ERROR;
     }
@@ -808,7 +808,7 @@ ngx_http_statshouse_handler(ngx_http_request_t *request)
 ngx_int_t
 ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
 {
-    ngx_http_statshouse_loc_conf_t    *shlc;
+    ngx_http_statshouse_loc_conf_t    *slcf;
 
     ngx_statshouse_server_t           *server;
     ngx_statshouse_conf_t             *confs;
@@ -816,19 +816,19 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
     ngx_uint_t                         i;
     ngx_int_t                          j, n;
 
-    shlc = ngx_http_get_module_loc_conf(request, ngx_http_statshouse_module);
-    if (shlc->server == NULL || shlc->confs == NULL || shlc->enable == 0) {
+    slcf = ngx_http_get_module_loc_conf(request, ngx_http_statshouse_module);
+    if (slcf->server == NULL || slcf->confs == NULL || slcf->enable == 0) {
         return NGX_OK;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, request->connection->log, 0,
         "statshouse handler");
 
-    confs = shlc->confs->elts;
-    server = shlc->server;
+    confs = slcf->confs->elts;
+    server = slcf->server;
     stats = server->splits;
 
-    for (i = 0; i < shlc->confs->nelts; i++) {
+    for (i = 0; i < slcf->confs->nelts; i++) {
         if (phase == NULL && confs[i].phase.len != 0) {
             continue;
         }
@@ -863,18 +863,18 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
 ngx_int_t
 ngx_http_statshouse_send_stat(ngx_http_request_t *request, ngx_statshouse_stat_t *stat)
 {
-    ngx_http_statshouse_loc_conf_t  *shlc;
+    ngx_http_statshouse_loc_conf_t  *slcf;
     ngx_statshouse_server_t         *server;
 
-    shlc = ngx_http_get_module_loc_conf(request, ngx_http_statshouse_module);
-    if (shlc->server == NULL || shlc->enable == 0) {
+    slcf = ngx_http_get_module_loc_conf(request, ngx_http_statshouse_module);
+    if (slcf->server == NULL || slcf->enable == 0) {
         return NGX_OK;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, request->connection->log, 0,
         "statshouse stat handler");
 
-    server = shlc->server;
+    server = slcf->server;
 
     ngx_statshouse_send(server, stat);
     return NGX_OK;
