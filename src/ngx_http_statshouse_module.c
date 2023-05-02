@@ -33,9 +33,12 @@ typedef struct {
 
 typedef struct {
     ngx_array_t                                *servers;
+    ngx_array_t                                *confs;
 } ngx_http_statshouse_main_conf_t;
 
 
+static ngx_int_t   ngx_http_statshouse_init_complex(ngx_conf_t *cf);
+static ngx_int_t   ngx_http_statshouse_variable_exists(ngx_conf_t *cf, ngx_str_t name);
 static ngx_int_t   ngx_http_statshouse_init(ngx_conf_t *cf);
 static void *      ngx_http_statshouse_create_main_conf(ngx_conf_t *cf);
 static void *      ngx_http_statshouse_create_loc_conf(ngx_conf_t *cf);
@@ -66,6 +69,16 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
         0,
         NULL
     },
+
+    { ngx_string("exists"),
+        NGX_HTTP_STATSHOUSE_CONF
+            |NGX_CONF_1MORE,
+        ngx_conf_set_str_array_slot,
+        NGX_HTTP_STATSHOUSE_CONF_OFFSET,
+        offsetof(ngx_statshouse_conf_t, exists),
+        NULL
+    },
+
 
     { ngx_string("condition"),
         NGX_HTTP_STATSHOUSE_CONF
@@ -312,6 +325,147 @@ static ngx_http_variable_t  ngx_http_statshouse_variables[] = {
 
 
 static ngx_int_t
+ngx_http_statshouse_init_complex(ngx_conf_t *cf)
+{
+    ngx_http_statshouse_main_conf_t    *smcf;
+    ngx_statshouse_conf_t             **confs, *conf;
+    ngx_statshouse_conf_key_t          *key;
+    ngx_http_compile_complex_value_t    ccv;
+    ngx_str_t                          *variables;
+    ngx_uint_t                          i, j, n;
+
+    smcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_statshouse_module);
+    if (smcf->confs == NULL) {
+        return NGX_OK;
+    }
+
+    confs = smcf->confs->elts;
+    for (i = 0; i < smcf->confs->nelts; i++) {
+        conf = confs[i];
+
+        if (conf->exists) {
+            variables = conf->exists->elts;
+
+            for (n = 0; n < conf->exists->nelts; n++) {
+                if (ngx_http_statshouse_variable_exists(cf, variables[n]) != NGX_OK) {
+                    conf->disable = 1;
+                    break;
+                }
+            }
+        }
+
+        if (conf->disable) {
+            continue;
+        }
+
+        ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+        conf->value.complex = ngx_pcalloc(cf->pool, sizeof(ngx_http_complex_value_t));
+        if (conf->value.complex == NULL) {
+            return NGX_ERROR;
+        }
+
+        ccv.cf = cf;
+        ccv.value = &conf->value.string;
+        ccv.complex_value = conf->value.complex;
+
+        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+            return NGX_ERROR;
+        }
+
+        for (j = 0; j < NGX_STATSHOUSE_STAT_KEYS_MAX; j++) {
+            key = &conf->keys[j];
+
+            if (key->name.len == 0) {
+                continue;
+            }
+
+            if (key->exists) {
+                variables = key->exists->elts;
+
+                for (n = 0; n < key->exists->nelts; n++) {
+                    if (ngx_http_statshouse_variable_exists(cf, variables[n]) != NGX_OK) {
+                        key->disable = 1;
+                        break;
+                    }
+                }
+            }
+
+            if (key->disable) {
+                continue;
+            }
+
+            ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+            key->complex = ngx_pcalloc(cf->pool, sizeof(ngx_http_complex_value_t));
+            if (key->complex == NULL) {
+                return NGX_ERROR;
+            }
+
+            ccv.cf = cf;
+            ccv.value = &key->string;
+            ccv.complex_value = key->complex;
+
+            if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+                return NGX_ERROR;
+            }
+        }
+    }
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_statshouse_variable_exists(ngx_conf_t *cf, ngx_str_t name)
+{
+    ngx_uint_t                  i;
+    ngx_http_variable_t        *v, *pv;
+    ngx_hash_key_t             *key;
+    ngx_http_core_main_conf_t  *cmcf;
+
+    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
+
+    if (name.len < 2 || name.data[0] != '$') {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid variable name in exists \"%V\"", &name);
+        return NGX_ERROR;
+    }
+
+    name.data++;
+    name.len--;
+
+    pv = cmcf->prefix_variables.elts;
+    for (i = 0; i < cmcf->prefix_variables.nelts; i++) {
+        if (name.len >= pv[i].name.len
+            && ngx_strncmp(name.data, pv[i].name.data, pv[i].name.len) == 0)
+        {
+            return NGX_OK;
+        }
+    }
+
+    v = cmcf->variables.elts;
+    for (i = 0; i < cmcf->variables.nelts; i++) {
+        if (name.len == v[i].name.len
+            && ngx_strncmp(name.data, v[i].name.data, name.len) == 0)
+        {
+            return NGX_OK;
+        }
+    }
+
+    key = cmcf->variables_keys->keys.elts;
+    for (i = 0; i < cmcf->variables_keys->keys.nelts; i++) {
+        if (name.len == key[i].key.len
+            && ngx_strncmp(name.data, key[i].key.data, name.len) == 0)
+        {
+            return NGX_OK;
+        }
+    }
+
+    return NGX_DECLINED;
+}
+
+
+static ngx_int_t
 ngx_http_statshouse_init(ngx_conf_t *cf)
 {
     ngx_http_core_main_conf_t         *cmcf;
@@ -330,8 +484,12 @@ ngx_http_statshouse_init(ngx_conf_t *cf)
         *v = *cv;
     }
 
+    if (ngx_http_statshouse_init_complex(cf) == NGX_ERROR) {
+        return NGX_ERROR;
+    }
+
     smcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_statshouse_module);
-    if (smcf->servers == NULL) {
+    if (smcf->servers == NULL || smcf->confs == NULL) {
         return NGX_OK;
     }
 
@@ -395,9 +553,9 @@ ngx_http_statshouse_create_loc_conf(ngx_conf_t *cf)
 static char *
 ngx_http_statshouse_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 {
-    ngx_http_statshouse_loc_conf_t  *prev = parent;
-    ngx_http_statshouse_loc_conf_t  *conf = child;
-    ngx_statshouse_conf_t           *sconfs, *sconf;
+    ngx_http_statshouse_loc_conf_t   *prev = parent;
+    ngx_http_statshouse_loc_conf_t   *conf = child;
+    ngx_statshouse_conf_t           **sconfs, **sconf;
     ngx_uint_t                       i;
 
     if (prev->confs) {
@@ -427,13 +585,14 @@ ngx_http_statshouse_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 static char *
 ngx_http_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_statshouse_loc_conf_t  *slcf = conf;
+    ngx_http_statshouse_loc_conf_t   *slcf = conf;
 
-    ngx_http_statshouse_conf_ctx_t  *ctx;
-    ngx_statshouse_conf_t           *shc;
-    ngx_str_t                       *value;
-    ngx_conf_t                       save;
-    char                            *rv;
+    ngx_http_statshouse_main_conf_t  *smcf;
+    ngx_http_statshouse_conf_ctx_t   *ctx;
+    ngx_statshouse_conf_t            *shc, **shc_ptr;
+    ngx_str_t                        *value;
+    ngx_conf_t                        save;
+    char                             *rv;
 
     if (cf->module_type != NGX_HTTP_MODULE) {
         return NGX_CONF_ERROR;
@@ -452,26 +611,21 @@ ngx_http_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     if (slcf->confs == NULL) {
-        slcf->confs = ngx_pcalloc(cf->pool, sizeof(ngx_array_t));
+        slcf->confs = ngx_array_create(cf->pool, 1, sizeof(ngx_statshouse_conf_t *));
         if (slcf->confs == NULL) {
-            return NGX_CONF_ERROR;
-        }
-
-        if (ngx_array_init(slcf->confs, cf->pool, 1, sizeof(ngx_statshouse_conf_t)) != NGX_OK) {
             return NGX_CONF_ERROR;
         }
     }
 
-    shc = ngx_array_push(slcf->confs);
+    shc = ngx_pcalloc(cf->pool, sizeof(ngx_statshouse_conf_t));
     if (shc == NULL) {
         return NGX_CONF_ERROR;
     }
 
-    ngx_memzero(shc, sizeof(ngx_statshouse_conf_t));
-
     value = cf->args->elts;
     shc->name = value[1];
 
+    shc->exists = NGX_CONF_UNSET_PTR;
     shc->condition = NGX_CONF_UNSET_PTR;
     shc->timeout = NGX_CONF_UNSET;
 
@@ -494,8 +648,31 @@ ngx_http_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
+    ngx_conf_init_ptr_value(shc->exists, NULL);
     ngx_conf_init_ptr_value(shc->condition, NULL);
     ngx_conf_init_value(shc->timeout, 0);
+
+    shc_ptr = ngx_array_push(slcf->confs);
+    if (shc_ptr == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *shc_ptr = shc;
+
+    smcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_statshouse_module);
+    if (smcf->confs == NULL) {
+        smcf->confs = ngx_array_create(cf->pool, 1, sizeof(ngx_statshouse_conf_t *));
+        if (smcf->confs == NULL) {
+            return NGX_CONF_ERROR;
+        }
+    }
+
+    shc_ptr = ngx_array_push(smcf->confs);
+    if (shc_ptr == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *shc_ptr = shc;
 
     return NGX_CONF_OK;
 }
@@ -508,7 +685,6 @@ ngx_http_statshouse_value_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     ngx_statshouse_conf_value_t       *field;
     ngx_str_t                         *value;
-    ngx_http_compile_complex_value_t   ccv;
     ngx_uint_t                         i;
 
     field = (ngx_statshouse_conf_value_t *) (p + cmd->offset);
@@ -518,21 +694,6 @@ ngx_http_statshouse_value_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     value = cf->args->elts;
-
-    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
-
-    field->complex = ngx_pcalloc(cf->pool, sizeof(ngx_http_complex_value_t));
-    if (field->complex == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    ccv.cf = cf;
-    ccv.value = &value[1];
-    ccv.complex_value = field->complex;
-
-    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
-        return NGX_CONF_ERROR;
-    }
 
     for (i = 2; i < cf->args->nelts; i++) {
         if (ngx_strncmp(value[i].data, "split", 5) == 0) {
@@ -545,6 +706,7 @@ ngx_http_statshouse_value_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     field->type = *((ngx_statshouse_stat_type_e *) &cmd->post);
+    field->string = value[1];
 
     return NGX_CONF_OK;
 }
@@ -556,8 +718,7 @@ ngx_http_statshouse_key_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     char  *p = conf;
 
     ngx_statshouse_conf_key_t         *key;
-    ngx_str_t                         *value;
-    ngx_http_compile_complex_value_t   ccv;
+    ngx_str_t                         *value, *variable, s;
     ngx_uint_t                         i;
 
     key = (ngx_statshouse_conf_key_t *) (p + cmd->offset);
@@ -568,27 +729,35 @@ ngx_http_statshouse_key_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     value = cf->args->elts;
 
+    key->string = value[1];
+
     key->name.data = (u_char *) cmd->post;
     key->name.len = ngx_strlen(key->name.data);
-
-    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
-
-    key->complex = ngx_pcalloc(cf->pool, sizeof(ngx_http_complex_value_t));
-    if (key->complex == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    ccv.cf = cf;
-    ccv.value = &value[1];
-    ccv.complex_value = key->complex;
-
-    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
-        return NGX_CONF_ERROR;
-    }
 
     for (i = 2; i < cf->args->nelts; i++) {
         if (ngx_strncmp(value[i].data, "split", 5) == 0) {
             key->split = 1;
+            continue;
+        }
+
+        if (ngx_strncmp(value[i].data, "exists=", 7) == 0) {
+            s.data = value[i].data + 7;
+            s.len = value[i].len - 7;
+
+            if (key->exists == NULL) {
+                key->exists = ngx_array_create(cf->pool, 1, sizeof(ngx_str_t));
+                if (key->exists == NULL) {
+                    return NGX_CONF_ERROR;
+                }
+            }
+
+            variable = ngx_array_push(key->exists);
+            if (variable == NULL) {
+                return NGX_CONF_ERROR;
+            }
+
+            *variable = s;
+
             continue;
         }
 
@@ -811,7 +980,7 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
     ngx_http_statshouse_loc_conf_t    *slcf;
 
     ngx_statshouse_server_t           *server;
-    ngx_statshouse_conf_t             *confs;
+    ngx_statshouse_conf_t            **confs, *conf;
     ngx_statshouse_stat_t             *stats;
     ngx_uint_t                         i;
     ngx_int_t                          j, n;
@@ -829,18 +998,20 @@ ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
     stats = server->splits;
 
     for (i = 0; i < slcf->confs->nelts; i++) {
-        if (phase == NULL && confs[i].phase.len != 0) {
+        conf = confs[i];
+
+        if (phase == NULL && conf->phase.len != 0) {
             continue;
         }
 
         if (phase &&
-            (phase->len != confs[i].phase.len ||
-                ngx_strncmp(phase->data, confs[i].phase.data, phase->len) != 0))
+            (phase->len != conf->phase.len ||
+                ngx_strncmp(phase->data, conf->phase.data, phase->len) != 0))
         {
             continue;
         }
 
-        n = ngx_statshouse_stat_compile(&confs[i], stats, server->splits_max,
+        n = ngx_statshouse_stat_compile(conf, stats, server->splits_max,
             (ngx_statshouse_complex_value_pt) ngx_http_complex_value, request,
             request->connection->log);
         if (n <= 0) {

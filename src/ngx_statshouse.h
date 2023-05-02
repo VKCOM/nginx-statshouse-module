@@ -19,6 +19,8 @@ typedef ngx_int_t (*ngx_statshouse_complex_value_pt)(void *ctx, void *val, ngx_s
 
 
 typedef struct {
+    ngx_str_t                            string;
+
     void                                *complex;
     ngx_statshouse_stat_type_e           type;
 
@@ -26,20 +28,28 @@ typedef struct {
 } ngx_statshouse_conf_value_t;
 
 typedef struct {
+    ngx_str_t                            string;
+
     void                                *complex;
     ngx_str_t                            name;
 
+    ngx_array_t                         *exists;
+
     ngx_flag_t                           split;
+    ngx_flag_t                           disable;
 } ngx_statshouse_conf_key_t;
 
 typedef struct {
     ngx_str_t                            name;
     ngx_str_t                            phase;
 
+    ngx_array_t                         *exists;
     ngx_array_t                         *condition;
 
     time_t                               timeout;
     time_t                               last;
+
+    ngx_flag_t                           disable;
 
     ngx_statshouse_conf_value_t          value;
     ngx_statshouse_conf_key_t            keys[NGX_STATSHOUSE_STAT_KEYS_MAX];

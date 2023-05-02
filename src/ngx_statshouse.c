@@ -468,6 +468,10 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
     ngx_str_t  s, split;
     ngx_int_t  splits;
 
+    if (conf->disable) {
+        return NGX_DECLINED;
+    }
+
     if (conf->timeout) {
         now = ngx_time();
 
@@ -489,6 +493,10 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
 
     for (i = 0; i < NGX_STATSHOUSE_STAT_KEYS_MAX; i++) {
         ngx_str_null(&keys[i]);
+
+        if (conf->keys[i].disable) {
+            continue;
+        }
 
         if (conf->keys[i].name.len == 0) {
             continue;
