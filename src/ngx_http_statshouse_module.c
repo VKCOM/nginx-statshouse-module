@@ -83,9 +83,9 @@ static ngx_command_t  ngx_http_statshouse_commands[] = {
     { ngx_string("condition"),
         NGX_HTTP_STATSHOUSE_CONF
             |NGX_CONF_1MORE,
-        ngx_http_set_predicate_slot,
+        ngx_conf_set_str_array_slot,
         NGX_HTTP_STATSHOUSE_CONF_OFFSET,
-        offsetof(ngx_statshouse_conf_t, condition),
+        offsetof(ngx_statshouse_conf_t, condition.strings),
         NULL
     },
 
@@ -340,7 +340,8 @@ ngx_http_statshouse_init_complex(ngx_conf_t *cf)
     ngx_statshouse_conf_t             **confs, *conf;
     ngx_statshouse_conf_key_t          *key;
     ngx_http_compile_complex_value_t    ccv;
-    ngx_str_t                          *variables;
+    ngx_http_complex_value_t           *condition;
+    ngx_str_t                          *variables, *strings;
     ngx_uint_t                          i, j, n;
 
     smcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_statshouse_module);
@@ -381,6 +382,35 @@ ngx_http_statshouse_init_complex(ngx_conf_t *cf)
         if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
             return NGX_ERROR;
         }
+
+        if (conf->condition.strings) {
+            conf->condition.complex = ngx_array_create(cf->pool, conf->condition.strings->nelts,
+                sizeof(ngx_http_complex_value_t));
+            if (conf->condition.complex == NULL) {
+                return NGX_ERROR;
+            }
+
+            strings = conf->condition.strings->elts;
+
+            for (n = 0; n < conf->condition.strings->nelts; n++) {
+                condition = ngx_array_push(conf->condition.complex);
+                if (condition == NULL) {
+                    return NGX_ERROR;
+                }
+
+                ngx_memzero(condition, sizeof(ngx_http_complex_value_t));
+                ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+                ccv.cf = cf;
+                ccv.value = &strings[n];
+                ccv.complex_value = condition;
+
+                if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+                    return NGX_ERROR;
+                }
+            }
+        }
+
 
         for (j = 0; j < NGX_STATSHOUSE_STAT_KEYS_MAX; j++) {
             key = &conf->keys[j];
@@ -635,7 +665,7 @@ ngx_http_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     shc->name = value[1];
 
     shc->exists = NGX_CONF_UNSET_PTR;
-    shc->condition = NGX_CONF_UNSET_PTR;
+    shc->condition.strings = NGX_CONF_UNSET_PTR;
     shc->timeout = NGX_CONF_UNSET;
     shc->sample = NGX_CONF_UNSET;
 
@@ -659,7 +689,7 @@ ngx_http_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     ngx_conf_init_ptr_value(shc->exists, NULL);
-    ngx_conf_init_ptr_value(shc->condition, NULL);
+    ngx_conf_init_ptr_value(shc->condition.strings, NULL);
     ngx_conf_init_value(shc->timeout, 0);
     ngx_conf_init_value(shc->sample, 0);
 

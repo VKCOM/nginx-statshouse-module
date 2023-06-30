@@ -40,11 +40,17 @@ typedef struct {
 } ngx_statshouse_conf_key_t;
 
 typedef struct {
+    ngx_array_t                         *strings;
+    ngx_array_t                         *complex;
+} ngx_statshouse_conf_condition_t;
+
+typedef struct {
     ngx_str_t                            name;
     ngx_str_t                            phase;
 
     ngx_array_t                         *exists;
-    ngx_array_t                         *condition;
+
+    ngx_statshouse_conf_condition_t      condition;
 
     time_t                               timeout;
     time_t                               last;
