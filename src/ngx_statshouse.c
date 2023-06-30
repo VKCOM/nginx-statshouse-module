@@ -482,7 +482,7 @@ ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *
         conf->last = now;
     }
 
-    rc = ngx_statshouse_test_required_predicates(conf->condition, complex, complex_ctx);
+    rc = ngx_statshouse_test_required_predicates(conf->condition.complex, complex, complex_ctx);
     if (rc != NGX_OK) {
         return rc;
     }

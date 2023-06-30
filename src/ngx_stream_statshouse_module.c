@@ -73,7 +73,7 @@ static ngx_command_t  ngx_stream_statshouse_commands[] = {
             |NGX_CONF_1MORE,
         ngx_stream_statshouse_set_predicate_slot,
         NGX_STREAM_STATSHOUSE_CONF_OFFSET,
-        offsetof(ngx_statshouse_conf_t, condition),
+        offsetof(ngx_statshouse_conf_t, condition.strings),
         NULL
     },
 
@@ -522,7 +522,7 @@ ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     value = cf->args->elts;
     shc->name = value[1];
 
-    shc->condition = NGX_CONF_UNSET_PTR;
+    shc->condition.strings = NGX_CONF_UNSET_PTR;
     shc->timeout = NGX_CONF_UNSET;
     shc->sample = NGX_CONF_UNSET;
 
@@ -545,7 +545,7 @@ ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
         return NGX_CONF_ERROR;
     }
 
-    ngx_conf_init_ptr_value(shc->condition, NULL);
+    ngx_conf_init_ptr_value(shc->condition.strings, NULL);
     ngx_conf_init_value(shc->timeout, 0);
     ngx_conf_init_value(shc->sample, 0);
 
