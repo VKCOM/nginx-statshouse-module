@@ -746,7 +746,7 @@ ngx_http_statshouse_value_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
-    field->type = *((ngx_statshouse_stat_type_e *) &cmd->post);
+    field->type = (ngx_statshouse_stat_type_e) ((intptr_t) cmd->post);
     field->string = value[1];
 
     return NGX_CONF_OK;
