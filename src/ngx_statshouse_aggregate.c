@@ -213,11 +213,9 @@ ngx_statshouse_aggregate_process(ngx_statshouse_aggregate_t *aggregate, ngx_msec
         }
 
         rc = aggregate->handler(&astat->stat, aggregate->ctx);
-        if (rc != NGX_OK) {
-            return rc;
+        if (rc == NGX_OK) {
+            ++count;
         }
-
-        ++count;
 
         ngx_queue_remove(queue);
 
