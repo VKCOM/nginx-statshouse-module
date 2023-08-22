@@ -282,7 +282,7 @@ ngx_statshouse_send_to_buffer(ngx_statshouse_server_t *server, ngx_statshouse_st
             ngx_log_error(NGX_LOG_WARN, server->log, 0,
                 "statshouse error send stat: to big");
 
-            return NGX_ERROR;
+            return NGX_DECLINED;
         }
     }
 
