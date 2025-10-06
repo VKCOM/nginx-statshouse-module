@@ -389,11 +389,11 @@ ngx_stream_statshouse_create_srv_conf(ngx_conf_t *cf)
     /*
      * set by ngx_pcalloc():
      * 
+     * conf->server
      * conf->confs
      */
 
     conf->enable = NGX_CONF_UNSET;
-    conf->server = NGX_CONF_UNSET_PTR;
 
     return conf;
 }
@@ -424,8 +424,11 @@ ngx_stream_statshouse_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
+    if (conf->server == NULL) {
+        conf->server = prev->server;
+    }
+
     ngx_conf_merge_value(conf->enable, prev->enable, 0);
-    ngx_conf_merge_ptr_value(conf->server, prev->server, NULL);
 
     return NGX_CONF_OK;
 }
@@ -669,7 +672,7 @@ ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
 
     value = cf->args->elts;
 
-    if (slcf->server != NGX_CONF_UNSET_PTR) {
+    if (slcf->server != NULL) {
         return "is duplicate";
     }
 
@@ -732,7 +735,7 @@ ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
 
         if (ngx_strncmp(value[i].data, "aggregate_values=", 17) == 0) {
 
-            s.data =  value[i].data + 10;
+            s.data =  value[i].data + 17;
             s.len = value[i].data + value[i].len - s.data;
 
             aggregate_values = ngx_atoi(s.data, s.len);
@@ -760,7 +763,7 @@ ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
             continue;
         }
 
-        if (ngx_strncmp(value[i].data, "splits_max=", 6) == 0) {
+        if (ngx_strncmp(value[i].data, "splits_max=", 11) == 0) {
 
             s.data =  value[i].data + 11;
             s.len = value[i].data + value[i].len - s.data;
