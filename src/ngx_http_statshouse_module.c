@@ -36,6 +36,12 @@ typedef struct {
     ngx_array_t                                *confs;
 } ngx_http_statshouse_main_conf_t;
 
+typedef struct {
+    ngx_http_request_t                          request;
+    ngx_connection_t                            connection;
+    struct sockaddr                             sockaddr;
+} ngx_http_statshouse_request_data_t;
+
 
 static ngx_int_t   ngx_http_statshouse_init_complex(ngx_conf_t *cf);
 static ngx_int_t   ngx_http_statshouse_variable_exists(ngx_conf_t *cf, ngx_str_t name);
@@ -1018,6 +1024,49 @@ ngx_http_statshouse_handler(ngx_http_request_t *request)
 }
 
 
+ngx_http_request_t *
+ngx_http_statshouse_make_request(ngx_cycle_t *cycle, ngx_pool_t *pool,
+    ngx_http_conf_ctx_t *ctx)
+{
+    ngx_http_core_main_conf_t           *cmcf;
+    ngx_http_statshouse_request_data_t  *request_data;
+
+    request_data = ngx_pcalloc(pool, sizeof(ngx_http_statshouse_request_data_t));
+    if (request_data == NULL) {
+        return NULL;
+    }
+
+    cmcf = ngx_http_cycle_get_module_main_conf(cycle, ngx_http_core_module);
+    if (cmcf == NULL) {
+        return NULL;
+    }
+
+    ngx_memset(request_data, 0, sizeof(ngx_http_statshouse_request_data_t));
+
+    request_data->connection.log = pool->log;
+    request_data->connection.sockaddr = &request_data->sockaddr;
+
+    request_data->request.main = &request_data->request;
+    request_data->request.pool = pool;
+    request_data->request.connection = &request_data->connection;
+    request_data->request.main_conf = ctx->main_conf;
+    request_data->request.srv_conf = ctx->srv_conf;
+    request_data->request.loc_conf = ctx->loc_conf;
+
+    request_data->request.variables = ngx_pcalloc(pool, cmcf->variables.nelts * sizeof(ngx_http_variable_value_t));
+    if (request_data->request.variables == NULL) {
+        return NULL;
+    }
+
+    request_data->request.ctx = ngx_pcalloc(pool, sizeof(void *) * ngx_http_max_module);
+    if (request_data->request.ctx == NULL) {
+        return NULL;
+    }
+
+    return &request_data->request;
+}
+
+
 ngx_int_t
 ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase)
 {
@@ -1085,36 +1134,14 @@ ngx_int_t
 ngx_http_statshouse_send_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t *ctx,
     ngx_pool_t *pool, ngx_str_t *phase)
 {
-    ngx_http_core_main_conf_t  *cmcf;
-    ngx_connection_t            fc;
-    ngx_http_request_t          fr;
-    struct sockaddr             sockaddr;
+    ngx_http_request_t                  *fr;
 
-    cmcf = ngx_http_cycle_get_module_main_conf(cycle, ngx_http_core_module);
-    if (cmcf == NULL) {
+    fr = ngx_http_statshouse_make_request(cycle, pool, ctx);
+    if (fr == NULL) {
         return NGX_ERROR;
     }
 
-    ngx_memset(&fr, 0, sizeof(ngx_http_request_t));
-    ngx_memset(&fc, 0, sizeof(ngx_connection_t));
-    ngx_memset(&sockaddr, 0, sizeof(struct sockaddr));
-
-    fc.log = pool->log;
-    fc.sockaddr = &sockaddr;
-
-    fr.main = &fr;
-    fr.pool = pool;
-    fr.connection = &fc;
-    fr.main_conf = ctx->main_conf;
-    fr.srv_conf = ctx->srv_conf;
-    fr.loc_conf = ctx->loc_conf;
-
-    fr.variables = ngx_pcalloc(pool, cmcf->variables.nelts * sizeof(ngx_http_variable_value_t));
-    if (fr.variables == NULL) {
-        return NGX_ERROR;
-    }
-
-    return ngx_http_statshouse_send(&fr, phase);
+    return ngx_http_statshouse_send(fr, phase);
 }
 
 
@@ -1158,3 +1185,95 @@ ngx_http_statshouse_send_stat(ngx_http_request_t *request, ngx_statshouse_stat_t
     ngx_statshouse_send(server, stat);
     return NGX_OK;
 }
+
+
+ngx_int_t
+ngx_http_statshouse_send_stat_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t *ctx,
+    ngx_pool_t *pool, ngx_statshouse_stat_t *stat)
+{
+    ngx_http_request_t                  *fr;
+
+    fr = ngx_http_statshouse_make_request(cycle, pool, ctx);
+    if (fr == NULL) {
+        return NGX_ERROR;
+    }
+
+    return ngx_http_statshouse_send_stat(fr, stat);
+}
+
+
+ngx_int_t
+ngx_http_statshouse_send_stat_http(ngx_cycle_t *cycle, ngx_pool_t *pool, ngx_statshouse_stat_t *stat)
+{
+    ngx_http_conf_ctx_t        *ctx;
+
+    ctx = (ngx_http_conf_ctx_t *) cycle->conf_ctx[ngx_http_module.index];
+    return ngx_http_statshouse_send_stat_ctx(cycle, ctx, pool, stat);
+}
+
+
+ngx_int_t
+ngx_http_statshouse_send_stat_server(ngx_cycle_t *cycle, ngx_http_core_srv_conf_t *server,
+    ngx_pool_t *pool, ngx_statshouse_stat_t *stat)
+{
+    ngx_http_conf_ctx_t        *ctx;
+
+    ctx = server->ctx;
+    return ngx_http_statshouse_send_stat_ctx(cycle, ctx, pool, stat);
+}
+
+
+ngx_int_t
+ngx_http_statshouse_flush(ngx_http_request_t *request)
+{
+    ngx_http_statshouse_loc_conf_t  *slcf;
+    ngx_statshouse_server_t         *server;
+
+    slcf = ngx_http_get_module_loc_conf(request, ngx_http_statshouse_module);
+    if (slcf->server == NULL || slcf->enable == 0) {
+        return NGX_OK;
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, request->connection->log, 0,
+        "statshouse flush handler");
+
+    server = slcf->server;
+
+    ngx_statshouse_flush(server);
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_statshouse_flush_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t *ctx, ngx_pool_t *pool)
+{
+    ngx_http_request_t                  *fr;
+
+    fr = ngx_http_statshouse_make_request(cycle, pool, ctx);
+    if (fr == NULL) {
+        return NGX_ERROR;
+    }
+
+    return ngx_http_statshouse_flush(fr);
+}
+
+
+ngx_int_t
+ngx_http_statshouse_flush_http(ngx_cycle_t *cycle, ngx_pool_t *pool)
+{
+    ngx_http_conf_ctx_t        *ctx;
+
+    ctx = (ngx_http_conf_ctx_t *) cycle->conf_ctx[ngx_http_module.index];
+    return ngx_http_statshouse_flush_ctx(cycle, ctx, pool);
+}
+
+
+ngx_int_t
+ngx_http_statshouse_flush_server(ngx_cycle_t *cycle, ngx_http_core_srv_conf_t *server, ngx_pool_t *pool)
+{
+    ngx_http_conf_ctx_t        *ctx;
+
+    ctx = server->ctx;
+    return ngx_http_statshouse_flush_ctx(cycle, ctx, pool);
+}
+

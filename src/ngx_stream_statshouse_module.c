@@ -35,6 +35,12 @@ typedef struct {
     ngx_array_t                                *servers;
 } ngx_stream_statshouse_main_conf_t;
 
+typedef struct {
+    ngx_stream_session_t                        session;
+    ngx_connection_t                            connection;
+    struct sockaddr                             sockaddr;
+} ngx_stream_statshouse_session_data_t;
+
 
 static ngx_int_t   ngx_stream_statshouse_init(ngx_conf_t *cf);
 static void *      ngx_stream_statshouse_create_main_conf(ngx_conf_t *cf);
@@ -859,6 +865,42 @@ ngx_stream_statshouse_handler(ngx_stream_session_t *session)
 }
 
 
+ngx_stream_session_t *
+ngx_stream_statshouse_make_session(ngx_cycle_t *cycle, ngx_pool_t *pool,
+    ngx_stream_conf_ctx_t *ctx)
+{
+    ngx_stream_core_main_conf_t           *cmcf;
+    ngx_stream_statshouse_session_data_t  *session_data;
+
+    session_data = ngx_pcalloc(pool, sizeof(ngx_stream_statshouse_session_data_t));
+    if (session_data == NULL) {
+        return NULL;
+    }
+
+    cmcf = ngx_stream_cycle_get_module_main_conf(cycle, ngx_stream_core_module);
+    if (cmcf == NULL) {
+        return NULL;
+    }
+
+    ngx_memset(session_data, 0, sizeof(ngx_stream_statshouse_session_data_t));
+
+    session_data->connection.log = pool->log;
+    session_data->connection.sockaddr = &session_data->sockaddr;
+    session_data->connection.pool = pool;
+
+    session_data->session.connection = &session_data->connection;
+    session_data->session.main_conf = ctx->main_conf;
+    session_data->session.srv_conf = ctx->srv_conf;
+
+    session_data->session.variables = ngx_pcalloc(pool, cmcf->variables.nelts * sizeof(ngx_stream_variable_value_t));
+    if (session_data->session.variables == NULL) {
+        return NULL;
+    }
+
+    return &session_data->session;
+}
+
+
 ngx_int_t
 ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
 {
@@ -921,6 +963,42 @@ ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
 
 
 ngx_int_t
+ngx_stream_statshouse_send_ctx(ngx_cycle_t *cycle, ngx_stream_conf_ctx_t *ctx,
+    ngx_pool_t *pool, ngx_str_t *phase)
+{
+    ngx_stream_session_t                  *fs;
+
+    fs = ngx_stream_statshouse_make_session(cycle, pool, ctx);
+    if (fs == NULL) {
+        return NGX_ERROR;
+    }
+
+    return ngx_stream_statshouse_send(fs, phase);
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_send_stream(ngx_cycle_t *cycle, ngx_pool_t *pool, ngx_str_t *phase)
+{
+    ngx_stream_conf_ctx_t        *ctx;
+
+    ctx = (ngx_stream_conf_ctx_t *) cycle->conf_ctx[ngx_stream_module.index];
+    return ngx_stream_statshouse_send_ctx(cycle, ctx, pool, phase);
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_send_server(ngx_cycle_t *cycle, ngx_stream_core_srv_conf_t *server,
+    ngx_pool_t *pool, ngx_str_t *phase)
+{
+    ngx_stream_conf_ctx_t        *ctx;
+
+    ctx = server->ctx;
+    return ngx_stream_statshouse_send_ctx(cycle, ctx, pool, phase);
+}
+
+
+ngx_int_t
 ngx_stream_statshouse_send_stat(ngx_stream_session_t *session, ngx_statshouse_stat_t *stat)
 {
     ngx_stream_statshouse_srv_conf_t  *sscf;
@@ -939,3 +1017,95 @@ ngx_stream_statshouse_send_stat(ngx_stream_session_t *session, ngx_statshouse_st
     ngx_statshouse_send(server, stat);
     return NGX_OK;
 }
+
+
+ngx_int_t
+ngx_stream_statshouse_send_stat_ctx(ngx_cycle_t *cycle, ngx_stream_conf_ctx_t *ctx,
+    ngx_pool_t *pool, ngx_statshouse_stat_t *stat)
+{
+    ngx_stream_session_t                  *fs;
+
+    fs = ngx_stream_statshouse_make_session(cycle, pool, ctx);
+    if (fs == NULL) {
+        return NGX_ERROR;
+    }
+
+    return ngx_stream_statshouse_send_stat(fs, stat);
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_send_stat_stream(ngx_cycle_t *cycle, ngx_pool_t *pool, ngx_statshouse_stat_t *stat)
+{
+    ngx_stream_conf_ctx_t        *ctx;
+
+    ctx = (ngx_stream_conf_ctx_t *) cycle->conf_ctx[ngx_stream_module.index];
+    return ngx_stream_statshouse_send_stat_ctx(cycle, ctx, pool, stat);
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_send_stat_server(ngx_cycle_t *cycle, ngx_stream_core_srv_conf_t *server,
+    ngx_pool_t *pool, ngx_statshouse_stat_t *stat)
+{
+    ngx_stream_conf_ctx_t        *ctx;
+
+    ctx = server->ctx;
+    return ngx_stream_statshouse_send_stat_ctx(cycle, ctx, pool, stat);
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_flush(ngx_stream_session_t *session)
+{
+    ngx_stream_statshouse_srv_conf_t  *sscf;
+    ngx_statshouse_server_t           *server;
+
+    sscf = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
+    if (sscf->server == NULL || sscf->enable == 0) {
+        return NGX_OK;
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, session->connection->log, 0,
+        "statshouse flush handler");
+
+    server = sscf->server;
+
+    ngx_statshouse_flush(server);
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_flush_ctx(ngx_cycle_t *cycle, ngx_stream_conf_ctx_t *ctx, ngx_pool_t *pool)
+{
+    ngx_stream_session_t                  *fs;
+
+    fs = ngx_stream_statshouse_make_session(cycle, pool, ctx);
+    if (fs == NULL) {
+        return NGX_ERROR;
+    }
+
+    return ngx_stream_statshouse_flush(fs);
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_flush_stream(ngx_cycle_t *cycle, ngx_pool_t *pool)
+{
+    ngx_stream_conf_ctx_t        *ctx;
+
+    ctx = (ngx_stream_conf_ctx_t *) cycle->conf_ctx[ngx_stream_module.index];
+    return ngx_stream_statshouse_flush_ctx(cycle, ctx, pool);
+}
+
+
+ngx_int_t
+ngx_stream_statshouse_flush_server(ngx_cycle_t *cycle, ngx_stream_core_srv_conf_t *server, ngx_pool_t *pool)
+{
+    ngx_stream_conf_ctx_t        *ctx;
+
+    ctx = server->ctx;
+    return ngx_stream_statshouse_flush_ctx(cycle, ctx, pool);
+}
+

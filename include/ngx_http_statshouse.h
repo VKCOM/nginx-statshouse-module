@@ -13,9 +13,12 @@
 
 #include <ngx_statshouse_stat.h>
 
+ngx_http_request_t * ngx_http_statshouse_make_request(
+    ngx_cycle_t *cycle, ngx_pool_t *pool, ngx_http_conf_ctx_t *ctx);
 
 ngx_int_t  ngx_http_statshouse_send(ngx_http_request_t *request, ngx_str_t *phase);
 ngx_int_t  ngx_http_statshouse_send_stat(ngx_http_request_t *request, ngx_statshouse_stat_t *stat);
+ngx_int_t  ngx_http_statshouse_flush(ngx_http_request_t *request);
 
 
 ngx_int_t  ngx_http_statshouse_send_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t *ctx,
@@ -23,6 +26,18 @@ ngx_int_t  ngx_http_statshouse_send_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t 
 ngx_int_t  ngx_http_statshouse_send_http(ngx_cycle_t *cycle, ngx_pool_t *pool, ngx_str_t *phase);
 ngx_int_t  ngx_http_statshouse_send_server(ngx_cycle_t *cycle, ngx_http_core_srv_conf_t *server,
     ngx_pool_t *pool, ngx_str_t *phase);
+
+
+ngx_int_t  ngx_http_statshouse_send_stat_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t *ctx,
+    ngx_pool_t *pool, ngx_statshouse_stat_t *stat);
+ngx_int_t  ngx_http_statshouse_send_stat_http(ngx_cycle_t *cycle, ngx_pool_t *pool, ngx_statshouse_stat_t *stat);
+ngx_int_t  ngx_http_statshouse_send_stat_server(ngx_cycle_t *cycle, ngx_http_core_srv_conf_t *server,
+    ngx_pool_t *pool, ngx_statshouse_stat_t *stat);
+
+
+ngx_int_t  ngx_http_statshouse_flush_ctx(ngx_cycle_t *cycle, ngx_http_conf_ctx_t *ctx, ngx_pool_t *pool);
+ngx_int_t  ngx_http_statshouse_flush_http(ngx_cycle_t *cycle, ngx_pool_t *pool);
+ngx_int_t  ngx_http_statshouse_flush_server(ngx_cycle_t *cycle, ngx_http_core_srv_conf_t *server, ngx_pool_t *pool);
 
 
 #endif
