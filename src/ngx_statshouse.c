@@ -316,7 +316,7 @@ ngx_statshouse_send(ngx_statshouse_server_t *server, ngx_statshouse_stat_t *stat
 static ngx_int_t
 ngx_statshouse_stat_is_group_delimiter(u_char *p, u_char *end, u_char **next_ptr)
 {
-    if (p + 3 < end) {
+    if (p + 3 > end) {
         return 0;
     }
 
@@ -324,7 +324,7 @@ ngx_statshouse_stat_is_group_delimiter(u_char *p, u_char *end, u_char **next_ptr
         return 0;
     }
 
-    if (*next_ptr) {
+    if (next_ptr) {
         *next_ptr = p + 3;
     }
 
