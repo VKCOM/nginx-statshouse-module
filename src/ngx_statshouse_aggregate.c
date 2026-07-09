@@ -134,7 +134,6 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
             return rc;
         }
         
-
         astat = ngx_statshouse_aggregate_alloc(aggregate, size);
         if (astat == NULL) {
             ngx_log_debug1(NGX_LOG_DEBUG_CORE, aggregate->log, 0,
@@ -308,7 +307,19 @@ ngx_statshouse_aggregate_insert_value(ngx_rbtree_node_t *temp,
             sn = ngx_rbtree_data(node, ngx_statshouse_aggregate_stat_t, node);
             sn_temp = ngx_rbtree_data(temp, ngx_statshouse_aggregate_stat_t, node);
 
-            p = (sn->size < sn_temp->size) ? &temp->left : &temp->right;
+            if (sn->size < sn_temp->size) {
+
+                p = &temp->left;
+
+            } else if (sn->size > sn_temp->size) {
+
+                p = &temp->right;
+
+            } else { // size == sn_temp->size
+
+                p = (sn->stat.type < sn_temp->stat.type) ? &temp->left : &temp->right;
+
+            }
         }
 
         if (*p == sentinel) {
@@ -360,6 +371,8 @@ ngx_statshouse_aggregate_lookup(ngx_statshouse_aggregate_t *aggregate, uint32_t 
             node = node->right;
             continue;
         }
+
+        /* size == astat->size */
 
         if (astat->stat.type == type) {
             return astat;
