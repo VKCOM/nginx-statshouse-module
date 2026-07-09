@@ -93,6 +93,12 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
 
     ngx_crc32_final(hash);
 
+    // 0 is used as mark of deleted entry, 
+    //  avoid using it, coz it could lead to sigfault
+    if (hash == 0) {
+        hash = 1;
+    }
+
     if (stat->type != ngx_statshouse_mt_counter) {
         size += sizeof(ngx_statshouse_stat_value_t) * (aggregate->values - 1);
     }
@@ -120,6 +126,8 @@ ngx_statshouse_aggregate(ngx_statshouse_aggregate_t *aggregate, ngx_statshouse_s
 
         ngx_rbtree_delete(&aggregate->rbtree, &astat->node);
 
+        // marks as deleted from rbtree, 
+        //  but keep the memory for dumping during process
         astat->node.key = 0;
         astat = NULL;
     }
@@ -295,26 +303,18 @@ ngx_statshouse_aggregate_insert_value(ngx_rbtree_node_t *temp,
     for ( ;; ) {
 
         if (node->key < temp->key) {
-
             p = &temp->left;
-
         } else if (node->key > temp->key) {
-
             p = &temp->right;
-
         } else { /* node->key == temp->key */
 
             sn = ngx_rbtree_data(node, ngx_statshouse_aggregate_stat_t, node);
             sn_temp = ngx_rbtree_data(temp, ngx_statshouse_aggregate_stat_t, node);
 
             if (sn->size < sn_temp->size) {
-
                 p = &temp->left;
-
             } else if (sn->size > sn_temp->size) {
-
                 p = &temp->right;
-
             } else { // size == sn_temp->size
 
                 p = (sn->stat.type < sn_temp->stat.type) ? &temp->left : &temp->right;
@@ -352,7 +352,6 @@ ngx_statshouse_aggregate_lookup(ngx_statshouse_aggregate_t *aggregate, uint32_t 
             node = node->left;
             continue;
         }
-
         if (hash > node->key) {
             node = node->right;
             continue;
@@ -366,7 +365,6 @@ ngx_statshouse_aggregate_lookup(ngx_statshouse_aggregate_t *aggregate, uint32_t 
             node = node->left;
             continue;
         }
-
         if (size > astat->size) {
             node = node->right;
             continue;
@@ -386,7 +384,8 @@ ngx_statshouse_aggregate_lookup(ngx_statshouse_aggregate_t *aggregate, uint32_t 
     return NULL;
 }
 
-
+// Invariant: memory must be freed strictly in the order of allocation (FIFO).
+// A queue is used for this.
 static void *
 ngx_statshouse_aggregate_alloc(ngx_statshouse_aggregate_t *aggregate, size_t size)
 {
@@ -419,7 +418,6 @@ ngx_statshouse_aggregate_alloc(ngx_statshouse_aggregate_t *aggregate, size_t siz
 
     return ptr;
 }
-
 
 static void
 ngx_statshouse_aggregate_free(ngx_statshouse_aggregate_t *aggregate, void *ptr, size_t size)
