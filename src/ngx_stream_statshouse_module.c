@@ -26,13 +26,17 @@ typedef struct {
 
 typedef struct {
     ngx_array_t                                *confs;
-    ngx_statshouse_server_t                    *server;
+    ngx_array_t                                *servers;
 
     ngx_flag_t                                  enable;
 } ngx_stream_statshouse_srv_conf_t;
 
 typedef struct {
     ngx_array_t                                *servers;
+    ngx_array_t                                *confs;
+
+    ngx_statshouse_stat_t                      *splits;
+    ngx_int_t                                   splits_max;
 } ngx_stream_statshouse_main_conf_t;
 
 typedef struct {
@@ -43,6 +47,7 @@ typedef struct {
 
 
 static ngx_int_t   ngx_stream_statshouse_init(ngx_conf_t *cf);
+static ngx_int_t   ngx_stream_statshouse_resolve_servers(ngx_conf_t *cf);
 static void *      ngx_stream_statshouse_create_main_conf(ngx_conf_t *cf);
 static void *      ngx_stream_statshouse_create_srv_conf(ngx_conf_t *cf);
 static char *      ngx_stream_statshouse_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child);
@@ -50,6 +55,7 @@ static char *      ngx_stream_statshouse_set_predicate_slot(ngx_conf_t *cf, ngx_
 static char *      ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *      ngx_stream_statshouse_value_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *      ngx_stream_statshouse_key_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static char *      ngx_stream_statshouse_server_name_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *      ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
 static ngx_int_t   ngx_stream_statshouse_handler(ngx_stream_session_t *session);
@@ -127,6 +133,15 @@ static ngx_command_t  ngx_stream_statshouse_commands[] = {
         ngx_conf_set_str_slot,
         NGX_STREAM_STATSHOUSE_CONF_OFFSET,
         offsetof(ngx_statshouse_conf_t, phase),
+        NULL
+    },
+
+    { ngx_string("server"),
+        NGX_STREAM_STATSHOUSE_CONF
+            |NGX_CONF_1MORE,
+        ngx_stream_statshouse_server_name_slot,
+        NGX_STREAM_STATSHOUSE_CONF_OFFSET,
+        0,
         NULL
     },
 
@@ -346,15 +361,34 @@ ngx_stream_statshouse_init(ngx_conf_t *cf)
     }
 
     smcf = ngx_stream_conf_get_module_main_conf(cf, ngx_stream_statshouse_module);
-    if (smcf->servers == NULL) {
-        return NGX_OK;
-    }
 
-    servers = smcf->servers->elts;
-    for (i = 0; i < smcf->servers->nelts; i++) {
-        if (ngx_statshouse_server_init(servers[i], cf->pool) != NGX_OK) {
+    if (smcf->servers != NULL) {
+        servers = smcf->servers->elts;
+        for (i = 0; i < smcf->servers->nelts; i++) {
+            if (ngx_statshouse_server_init(servers[i], cf->pool) != NGX_OK) {
+                return NGX_ERROR;
+            }
+
+            if (servers[i]->splits_max > smcf->splits_max) {
+                smcf->splits_max = servers[i]->splits_max;
+            }
+        }
+
+        smcf->splits = ngx_pcalloc(cf->pool,
+            sizeof(ngx_statshouse_stat_t) * smcf->splits_max);
+        if (smcf->splits == NULL) {
             return NGX_ERROR;
         }
+    }
+
+    if (smcf->confs != NULL) {
+        if (ngx_stream_statshouse_resolve_servers(cf) != NGX_OK) {
+            return NGX_ERROR;
+        }
+    }
+
+    if (smcf->servers == NULL) {
+        return NGX_OK;
     }
 
     cmcf = ngx_stream_conf_get_module_main_conf(cf, ngx_stream_core_module);
@@ -365,6 +399,86 @@ ngx_stream_statshouse_init(ngx_conf_t *cf)
     }
 
     *h = ngx_stream_statshouse_handler;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_stream_statshouse_resolve_servers(ngx_conf_t *cf)
+{
+    ngx_stream_statshouse_main_conf_t   *smcf;
+    ngx_statshouse_conf_t              **confs, *conf;
+    ngx_statshouse_server_t            **servers, **sp, *server;
+    ngx_str_t                           *names;
+    ngx_uint_t                           i, j, k;
+    ngx_flag_t                           found;
+
+    smcf = ngx_stream_conf_get_module_main_conf(cf, ngx_stream_statshouse_module);
+
+    confs = smcf->confs->elts;
+    servers = smcf->servers != NULL ? smcf->servers->elts : NULL;
+
+    for (i = 0; i < smcf->confs->nelts; i++) {
+        conf = confs[i];
+
+        if (conf->server_names == NULL) {
+            continue;
+        }
+
+        conf->servers = ngx_array_create(cf->pool, conf->server_names->nelts,
+            sizeof(ngx_statshouse_server_t *));
+        if (conf->servers == NULL) {
+            return NGX_ERROR;
+        }
+
+        names = conf->server_names->elts;
+
+        for (k = 0; k < conf->server_names->nelts; k++) {
+
+            server = NULL;
+
+            if (servers != NULL) {
+                for (j = 0; j < smcf->servers->nelts; j++) {
+                    if (servers[j]->name.len == names[k].len
+                        && ngx_strncmp(servers[j]->name.data, names[k].data,
+                                       names[k].len) == 0)
+                    {
+                        server = servers[j];
+                        break;
+                    }
+                }
+            }
+
+            if (server == NULL) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                    "statshouse_metric \"%V\" references unknown server \"%V\"",
+                    &conf->name, &names[k]);
+                return NGX_ERROR;
+            }
+
+            sp = conf->servers->elts;
+            found = 0;
+
+            for (j = 0; j < conf->servers->nelts; j++) {
+                if (sp[j] == server) {
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (found) {
+                continue;
+            }
+
+            sp = ngx_array_push(conf->servers);
+            if (sp == NULL) {
+                return NGX_ERROR;
+            }
+
+            *sp = server;
+        }
+    }
 
     return NGX_OK;
 }
@@ -397,7 +511,7 @@ ngx_stream_statshouse_create_srv_conf(ngx_conf_t *cf)
     /*
      * set by ngx_pcalloc():
      * 
-     * conf->server
+     * conf->servers
      * conf->confs
      */
 
@@ -412,8 +526,10 @@ ngx_stream_statshouse_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
 {
     ngx_stream_statshouse_srv_conf_t  *prev = parent;
     ngx_stream_statshouse_srv_conf_t  *conf = child;
-    ngx_statshouse_conf_t             *sconfs, *sconf;
-    ngx_uint_t                         i;
+    ngx_statshouse_conf_t            **sconfs, **sconf;
+    ngx_statshouse_server_t          **pservers, **sp;
+    ngx_uint_t                         i, j;
+    ngx_flag_t                         found;
 
     if (prev->confs) {
         if (conf->confs == NULL) {
@@ -432,8 +548,33 @@ ngx_stream_statshouse_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
-    if (conf->server == NULL) {
-        conf->server = prev->server;
+    if (prev->servers) {
+        if (conf->servers == NULL) {
+            conf->servers = prev->servers;
+        } else {
+            pservers = prev->servers->elts;
+
+            for (i = 0; i < prev->servers->nelts; i++) {
+                found = 0;
+
+                sp = conf->servers->elts;
+                for (j = 0; j < conf->servers->nelts; j++) {
+                    if (sp[j] == pservers[i]) {
+                        found = 1;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    sp = ngx_array_push(conf->servers);
+                    if (sp == NULL) {
+                        return NGX_CONF_ERROR;
+                    }
+
+                    *sp = pservers[i];
+                }
+            }
+        }
     }
 
     ngx_conf_merge_value(conf->enable, prev->enable, 0);
@@ -490,8 +631,9 @@ ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
 {
     ngx_stream_statshouse_srv_conf_t  *shlc = conf;
 
+    ngx_stream_statshouse_main_conf_t *smcf;
     ngx_stream_statshouse_conf_ctx_t  *ctx;
-    ngx_statshouse_conf_t             *shc;
+    ngx_statshouse_conf_t             *shc, **shc_ptr;
     ngx_str_t                         *value;
     ngx_conf_t                         save;
     char                              *rv;
@@ -513,22 +655,16 @@ ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     }
 
     if (shlc->confs == NULL) {
-        shlc->confs = ngx_pcalloc(cf->pool, sizeof(ngx_array_t));
+        shlc->confs = ngx_array_create(cf->pool, 1, sizeof(ngx_statshouse_conf_t *));
         if (shlc->confs == NULL) {
             return NGX_CONF_ERROR;
         }
-
-        if (ngx_array_init(shlc->confs, cf->pool, 1, sizeof(ngx_statshouse_conf_t)) != NGX_OK) {
-            return NGX_CONF_ERROR;
-        }
     }
 
-    shc = ngx_array_push(shlc->confs);
+    shc = ngx_pcalloc(cf->pool, sizeof(ngx_statshouse_conf_t));
     if (shc == NULL) {
         return NGX_CONF_ERROR;
     }
-
-    ngx_memzero(shc, sizeof(ngx_statshouse_conf_t));
 
     value = cf->args->elts;
     shc->name = value[1];
@@ -559,6 +695,29 @@ ngx_stream_statshouse_metric_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     ngx_conf_init_ptr_value(shc->condition.complex, NULL);
     ngx_conf_init_value(shc->timeout, 0);
     ngx_conf_init_value(shc->sample, 0);
+
+    shc_ptr = ngx_array_push(shlc->confs);
+    if (shc_ptr == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *shc_ptr = shc;
+
+    smcf = ngx_stream_conf_get_module_main_conf(cf, ngx_stream_statshouse_module);
+
+    if (smcf->confs == NULL) {
+        smcf->confs = ngx_array_create(cf->pool, 1, sizeof(ngx_statshouse_conf_t *));
+        if (smcf->confs == NULL) {
+            return NGX_CONF_ERROR;
+        }
+    }
+
+    shc_ptr = ngx_array_push(smcf->confs);
+    if (shc_ptr == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *shc_ptr = shc;
 
     return NGX_CONF_OK;
 }
@@ -664,25 +823,60 @@ ngx_stream_statshouse_key_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 
 static char *
+ngx_stream_statshouse_server_name_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_statshouse_conf_t  *shc = conf;
+
+    ngx_str_t              *value, *name;
+    ngx_uint_t              i;
+
+    if (shc->server_names != NULL) {
+        return "is duplicate";
+    }
+
+    value = cf->args->elts;
+
+    shc->server_names = ngx_array_create(cf->pool, cf->args->nelts - 1,
+        sizeof(ngx_str_t));
+    if (shc->server_names == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    for (i = 1; i < cf->args->nelts; i++) {
+        if (value[i].len == 0) {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                "invalid server name \"%V\"", &value[i]);
+            return NGX_CONF_ERROR;
+        }
+
+        name = ngx_array_push(shc->server_names);
+        if (name == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        *name = value[i];
+    }
+
+    return NGX_CONF_OK;
+}
+
+
+static char *
 ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_stream_statshouse_srv_conf_t    *slcf = conf;
     ngx_stream_statshouse_main_conf_t   *smcf;
     ngx_statshouse_server_t            **servers, **server_ptr, *server;
     ngx_url_t                            url;
-    ngx_str_t                           *value, s;
+    ngx_str_t                           *value, s, name;
     ngx_flag_t                           flush_after_request;
     ngx_int_t                            splits_max, aggregate_values;
-    ngx_uint_t                           i;
+    ngx_uint_t                           i, j;
     ssize_t                              buffer_size;
     size_t                               aggregate_size;
     ngx_msec_t                           flush;
 
     value = cf->args->elts;
-
-    if (slcf->server != NULL) {
-        return "is duplicate";
-    }
 
     if (cf->args->nelts == 2) {
         if (ngx_strncmp(value[1].data, "off", 3) == 0) {
@@ -698,6 +892,7 @@ ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     flush_after_request = 0;
     splits_max = 16;
     flush = 1000;
+    ngx_str_null(&name);
 
     ngx_memzero(&url, sizeof(ngx_url_t));
     url.url = value[1];
@@ -710,6 +905,21 @@ ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     }
 
     for (i = 2; i < cf->args->nelts; i++) {
+
+        if (ngx_strncmp(value[i].data, "name=", 5) == 0) {
+
+            s.data =  value[i].data + 5;
+            s.len = value[i].data + value[i].len - s.data;
+
+            if (s.len == 0) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid server name \"%V\"", &value[i]);
+                return NGX_CONF_ERROR;
+            }
+
+            name = s;
+
+            continue;
+        }
 
         if (ngx_strncmp(value[i].data, "buffer=", 7) == 0) {
 
@@ -810,8 +1020,17 @@ ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     server = NULL;
 
     for (i = 0; i < smcf->servers->nelts; i++) {
+        if (name.len != 0
+            && servers[i]->name.len == name.len
+            && ngx_strncmp(servers[i]->name.data, name.data, name.len) == 0)
+        {
+            return "duplicate statshouse server name";
+        }
+
         if (servers[i]->addr.addrs->socklen == url.addrs->socklen &&
             ngx_memcmp(servers[i]->addr.addrs->sockaddr, url.addrs->sockaddr, url.addrs->socklen) == 0 &&
+            servers[i]->name.len == name.len &&
+            (name.len == 0 || ngx_memcmp(servers[i]->name.data, name.data, name.len) == 0) &&
             servers[i]->flush_after_request == flush_after_request &&
             servers[i]->splits_max == splits_max &&
             servers[i]->aggregate_size == aggregate_size &&
@@ -823,37 +1042,54 @@ ngx_stream_statshouse_server_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
         }
     }
 
-    if (server) {
-        // found same server
-        slcf->server = server;
-        slcf->enable = 1;
-
-        return NGX_OK;
-    }
-
-    server = ngx_pcalloc(cf->pool, sizeof(ngx_statshouse_server_t));
     if (server == NULL) {
-        return NGX_CONF_ERROR;
+        server = ngx_pcalloc(cf->pool, sizeof(ngx_statshouse_server_t));
+        if (server == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        server_ptr = ngx_array_push(smcf->servers);
+        if (server_ptr == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        *server_ptr = server;
+
+        server->name = name;
+        server->addr = url;
+        server->flush_after_request = flush_after_request;
+        server->buffer_size = buffer_size;
+        server->aggregate_size = aggregate_size;
+        server->aggregate_values = aggregate_values;
+        server->splits_max = splits_max;
+        server->flush = flush;
+
+        server->log = &cf->cycle->new_log;
     }
 
-    server_ptr = ngx_array_push(smcf->servers);
-    if (server_ptr == NULL) {
-        return NGX_CONF_ERROR;
+    if (slcf->servers == NULL) {
+        slcf->servers = ngx_array_create(cf->pool, 1, sizeof(ngx_statshouse_server_t *));
+        if (slcf->servers == NULL) {
+            return NGX_CONF_ERROR;
+        }
     }
 
-    *server_ptr = server;
+    server_ptr = slcf->servers->elts;
+    for (j = 0; j < slcf->servers->nelts; j++) {
+        if (server_ptr[j] == server) {
+            break;
+        }
+    }
 
-    server->addr = url;
-    server->flush_after_request = flush_after_request;
-    server->buffer_size = buffer_size;
-    server->aggregate_size = aggregate_size;
-    server->aggregate_values = aggregate_values;
-    server->splits_max = splits_max;
-    server->flush = flush;
+    if (j == slcf->servers->nelts) {
+        server_ptr = ngx_array_push(slcf->servers);
+        if (server_ptr == NULL) {
+            return NGX_CONF_ERROR;
+        }
 
-    server->log = &cf->cycle->new_log;
+        *server_ptr = server;
+    }
 
-    slcf->server = server;
     slcf->enable = 1;
 
     return NGX_CONF_OK;
@@ -907,15 +1143,19 @@ ngx_int_t
 ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
 {
     ngx_stream_statshouse_srv_conf_t  *sscf;
+    ngx_stream_statshouse_main_conf_t *smcf;
 
-    ngx_statshouse_server_t           *server;
-    ngx_statshouse_conf_t             *confs;
+    ngx_statshouse_server_t          **servers, **targets;
+    ngx_statshouse_conf_t            **confs, *conf;
     ngx_statshouse_stat_t             *stats;
-    ngx_uint_t                         i;
+    ngx_uint_t                         i, t, ntargets;
     ngx_int_t                          j, n;
 
     sscf = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
-    if (sscf->server == NULL || sscf->confs == NULL || sscf->enable == 0) {
+    smcf = ngx_stream_get_module_main_conf(session, ngx_stream_statshouse_module);
+    if (sscf->servers == NULL || sscf->servers->nelts == 0
+        || sscf->confs == NULL || sscf->enable == 0)
+    {
         return NGX_OK;
     }
 
@@ -923,28 +1163,43 @@ ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
         "statshouse handler");
 
     confs = sscf->confs->elts;
-    server = sscf->server;
-    stats = server->splits;
+    servers = sscf->servers->elts;
 
     for (i = 0; i < sscf->confs->nelts; i++) {
-        if (phase == NULL && confs[i].phase.len != 0) {
+        conf = confs[i];
+
+        if (phase == NULL && conf->phase.len != 0) {
             continue;
         }
 
         if (phase &&
-            (phase->len != confs[i].phase.len ||
-                ngx_strncmp(phase->data, confs[i].phase.data, phase->len) != 0))
+            (phase->len != conf->phase.len ||
+                ngx_strncmp(phase->data, conf->phase.data, phase->len) != 0))
         {
             continue;
         }
 
-        if ((confs[i].sample > 0) &&
-            (ngx_random() % 100 > confs[i].sample))
+        if ((conf->sample > 0) &&
+            (ngx_random() % 100 > conf->sample))
         {
             continue;
         }
 
-        n = ngx_statshouse_stat_compile(&confs[i], stats, server->splits_max,
+        if (conf->servers != NULL) {
+            targets = conf->servers->elts;
+            ntargets = conf->servers->nelts;
+        } else {
+            targets = servers;
+            ntargets = sscf->servers->nelts;
+        }
+
+        if (ntargets == 0) {
+            continue;
+        }
+
+        stats = smcf->splits;
+
+        n = ngx_statshouse_stat_compile(conf, stats, smcf->splits_max,
             (ngx_statshouse_complex_value_pt) ngx_stream_complex_value, session,
             session->connection->log);
         if (n <= 0) {
@@ -954,12 +1209,17 @@ ngx_stream_statshouse_send(ngx_stream_session_t *session, ngx_str_t *phase)
         ngx_log_debug1(NGX_LOG_DEBUG_STREAM, session->connection->log, 0,
             "statshouse send %d stats", n);
 
-        for (j = 0; j < n; j++) {
-            ngx_statshouse_send(server, &stats[j]);
+        for (t = 0; t < ntargets; t++) {
+            for (j = 0; j < n; j++) {
+                ngx_statshouse_send(targets[t], &stats[j]);
+            }
         }
     }
 
-    ngx_statshouse_flush_after_request(server);
+    for (t = 0; t < sscf->servers->nelts; t++) {
+        ngx_statshouse_flush_after_request(servers[t]);
+    }
+
     return NGX_OK;
 }
 
@@ -1004,19 +1264,23 @@ ngx_int_t
 ngx_stream_statshouse_send_stat(ngx_stream_session_t *session, ngx_statshouse_stat_t *stat)
 {
     ngx_stream_statshouse_srv_conf_t  *sscf;
-    ngx_statshouse_server_t           *server;
+    ngx_statshouse_server_t          **servers;
+    ngx_uint_t                         i;
 
     sscf = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
-    if (sscf->server == NULL || sscf->enable == 0) {
+    if (sscf->servers == NULL || sscf->servers->nelts == 0 || sscf->enable == 0) {
         return NGX_OK;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_STREAM, session->connection->log, 0,
         "statshouse stat handler");
 
-    server = sscf->server;
+    servers = sscf->servers->elts;
 
-    ngx_statshouse_send(server, stat);
+    for (i = 0; i < sscf->servers->nelts; i++) {
+        ngx_statshouse_send(servers[i], stat);
+    }
+
     return NGX_OK;
 }
 
@@ -1061,19 +1325,23 @@ ngx_int_t
 ngx_stream_statshouse_flush(ngx_stream_session_t *session)
 {
     ngx_stream_statshouse_srv_conf_t  *sscf;
-    ngx_statshouse_server_t           *server;
+    ngx_statshouse_server_t          **servers;
+    ngx_uint_t                         i;
 
     sscf = ngx_stream_get_module_srv_conf(session, ngx_stream_statshouse_module);
-    if (sscf->server == NULL || sscf->enable == 0) {
+    if (sscf->servers == NULL || sscf->servers->nelts == 0 || sscf->enable == 0) {
         return NGX_OK;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_STREAM, session->connection->log, 0,
         "statshouse flush handler");
 
-    server = sscf->server;
+    servers = sscf->servers->elts;
 
-    ngx_statshouse_flush(server);
+    for (i = 0; i < sscf->servers->nelts; i++) {
+        ngx_statshouse_flush(servers[i]);
+    }
+
     return NGX_OK;
 }
 

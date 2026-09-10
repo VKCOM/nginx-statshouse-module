@@ -48,6 +48,10 @@ typedef struct {
     ngx_str_t                            name;
     ngx_str_t                            phase;
 
+    ngx_array_t                         *server_names;
+
+    ngx_array_t                         *servers;
+
     ngx_array_t                         *exists;
 
     ngx_statshouse_conf_condition_t      condition;
@@ -63,6 +67,7 @@ typedef struct {
 } ngx_statshouse_conf_t;
 
 typedef struct {
+    ngx_str_t                            name;
     ngx_url_t                            addr;
     ngx_connection_t                    *connection;
 
