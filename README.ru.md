@@ -21,16 +21,30 @@ ngx_http_statshouse_module - Модуль для отправки статы в 
 statshouse_server
 -------------------
 
-**syntax:** *statshouse_server* *server-addr* [buffer=*size*] [flush_after_request] | *off*
+**syntax:** *statshouse_server* *server-addr* [name=*name*] [buffer=*size*] [aggregate=*size*] [aggregate_values=*num*] [splits_max=*num*] [flush_after_request] | *off*
 
 **default:** no
 
 **context:** *http*, *server*, *location*
 
-Адрес сервера куда отправлять статистику.
+Адрес сервера куда отправлять статистику. Директива может быть указана
+несколько раз на одном уровне; статистика отправляется на все
+сконфигурированные серверы (fan-out). Серверы, определённые на внешнем
+уровне (*http*, *server*), наследуются внутренними уровнями и
+объединяются с серверами, определёнными на них.
 
-* buffer - Размер udp пакета (если не включен flush_after_request).
-* flush_after_request - Отправлять статистику после каждого запроса.
+* `name` - необязательное имя сервера, по которому на него можно
+  ссылаться из блока `statshouse_metric` с помощью параметра `server`.
+  Имена серверов должны быть уникальными; дубликат имени - ошибка
+  конфигурации.
+* `buffer` - Размер udp пакета (если не включен flush_after_request).
+* `aggregate` - размер буфера агрегации (0 - без агрегации).
+* `aggregate_values` - максимальное число агрегируемых значений (по умолчанию 24).
+* `splits_max` - максимальное число стат, компилируемых за раз (по умолчанию 16).
+* `flush_after_request` - Отправлять статистику после каждого запроса.
+
+Одинаковые `statshouse_server` (совпадает адрес, имя и параметры),
+указанные на разных уровнях, ссылаются на один и тот же сервер.
 
 
 statshouse_metric
@@ -52,6 +66,9 @@ statshouse_metric
 > **skey** - Отправляет string top значение в statshouse
 > **condition** - Если выставленно, то стата не отправится если значение будет пустое или "0"
 > **timeout** - Таймаут с какой частотой можно отправлять стату (в рамках одного воркера)
+> **server** - одно или несколько имён `statshouse_server`, на которые
+> отправляется эта стата; если не указано, стата отправляется на все
+> серверы данной локации. Неизвестное имя сервера - ошибка конфигурации.
 
 В одной стате возможно только один из параметров: *count*, *value*, *unique*
 
@@ -89,4 +106,28 @@ statshouse_metric
         key3 $status;
 
         skey $map_referer_domain;
+    }
+
+Пример с несколькими серверами:
+
+    statshouse_server 127.0.0.1:13301 name=local buffer=4k;
+    statshouse_server 10.0.0.1:13301 name=remote;
+
+    # отправляется на все серверы локации (local и remote)
+    statshouse_metric nginx_request_time {
+        value $request_time;
+    }
+
+    # отправляется только на сервер с именем "remote"
+    statshouse_metric nginx_request_time_remote {
+        value $request_time;
+
+        server remote;
+    }
+
+    # отправляется только на серверы с именами "local" и "remote"
+    statshouse_metric nginx_request_time_both {
+        value $request_time;
+
+        server local remote;
     }

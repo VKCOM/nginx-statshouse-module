@@ -48,6 +48,10 @@ typedef struct {
     ngx_str_t                            name;
     ngx_str_t                            phase;
 
+    ngx_array_t                         *server_names;
+
+    ngx_array_t                         *servers;
+
     ngx_array_t                         *exists;
 
     ngx_statshouse_conf_condition_t      condition;
@@ -63,6 +67,7 @@ typedef struct {
 } ngx_statshouse_conf_t;
 
 typedef struct {
+    ngx_str_t                            name;
     ngx_url_t                            addr;
     ngx_connection_t                    *connection;
 
@@ -95,5 +100,6 @@ ngx_int_t  ngx_statshouse_flush_after_request(ngx_statshouse_server_t *server);
 ngx_int_t  ngx_statshouse_stat_compile(ngx_statshouse_conf_t *conf, ngx_statshouse_stat_t *stats, ngx_int_t max,
     ngx_statshouse_complex_value_pt complex, void *complex_ctx, ngx_log_t *log);
 
+ngx_int_t  ngx_statshouse_exit_handler(ngx_statshouse_server_t *server);
 
 #endif
